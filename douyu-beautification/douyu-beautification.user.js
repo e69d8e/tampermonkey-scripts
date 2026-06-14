@@ -13,8 +13,8 @@
 // @grant        GM_registerMenuCommand
 // @run-at       document-start
 // @license      MIT
-// @downloadURL  https://github.com/douyu-beautification/raw/main/douyu-beautification.user.js
-// @updateURL    https://github.com/douyu-beautification/raw/main/douyu-beautification.user.js
+// @downloadURL  https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js
+// @updateURL    https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js
 // ==/UserScript==
 
 (function () {

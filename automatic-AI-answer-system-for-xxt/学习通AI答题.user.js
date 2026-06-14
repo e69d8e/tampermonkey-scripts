@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      1.2.0
 // @description  调用DeepSeek/MiMo AI自动完成学习通作业和考试题目
-// @author       李荣宁
+// @author       e69d8e
 // @match        *://*.chaoxing.com/*
 // @match        *://*.edu.cn/*
 // @grant        GM_xmlhttpRequest
@@ -16,6 +16,8 @@
 // @connect      api.xiaomimimo.com
 // @connect      *
 // @run-at       document-idle
+// @downloadURL  https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js
+// @updateURL    https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js
 // ==/UserScript==
 
 (function () {
