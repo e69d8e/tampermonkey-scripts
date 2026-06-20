@@ -20,6 +20,16 @@
 (function () {
     'use strict';
 
+    const isHomepage = window.location.pathname === '/' || window.location.pathname === '/index.htm' || window.location.pathname === '/index.html';
+
+    const HOMEPAGE_PLAYER_SELECTORS = [
+        '.IndexPlayer', '.IndexModule-player', '.layout-Main-player',
+        '.LivePlayer-index', '.FeaturedPlayer', '[class*="index-player"]',
+        '[class*="IndexPlayer"]', '[class*="HomeLive"]', '[class*="home-live"]',
+        '[class*="HomePlayer"]', '[class*="home-player"]', '[class*="player-wrapper__"]',
+        '[class*="player-component__"]'
+    ];
+
     // ========================
     //  配置管理
     // ========================
@@ -562,12 +572,29 @@
     };
 
     function forceRemoveElements() {
-        for (const [key, selectors] of Object.entries(JS_REMOVE_SELECTORS)) {
-            if (!config[key]) continue;
-            selectors.forEach(sel => {
-                document.querySelectorAll(sel).forEach(el => el.remove());
-            });
-        }
+        Object.entries(JS_REMOVE_SELECTORS).forEach(([key, selectors]) => {
+            if (config[key]) {
+                selectors.forEach(sel => document.querySelectorAll(sel).forEach(el => {
+                    el.style.display = 'none';
+                }));
+            }
+        });
+    }
+
+    // ========================
+    //  自动最高画质
+    // ========================
+    /**
+     * 通用轮询重试函数
+     * @param {Function} fn 返回 true 表示成功并停止重试
+     * @param {number} interval 间隔时间（ms）
+     * @param {number} maxAttempts 最大尝试次数
+     */
+    function retry(fn, interval = 1000, maxAttempts = 20) {
+        let attempts = 0;
+        const timer = setInterval(() => {
+            if (fn() || ++attempts >= maxAttempts) clearInterval(timer);
+        }, interval);
     }
 
     // ========================
@@ -576,18 +603,14 @@
     function autoHighQuality() {
         if (!config.autoHighQuality) return;
 
-        let attempts = 0;
-        const interval = setInterval(() => {
-            if (++attempts > 15) { clearInterval(interval); return; }
-
+        retry(() => {
             // 直接点击画质选项
             const qualityBtns = document.querySelectorAll(
                 '.tipitem, .PlayerControl-item[class*="quality"], [class*="QualityItem"], [class*="quality-item"]'
             );
             if (qualityBtns.length > 0) {
                 qualityBtns[0].click();
-                clearInterval(interval);
-                return;
+                return true;
             }
 
             // 备选：点击画质选择器后选最高
@@ -600,11 +623,12 @@
                     const items = document.querySelectorAll('.tipitem, [class*="QualityItem"]');
                     if (items.length > 0) {
                         items[0].click();
-                        clearInterval(interval);
                     }
                 }, 300);
+                return true;
             }
-        }, 1500);
+            return false;
+        }, 1500, 15);
     }
 
     // ========================
@@ -613,18 +637,49 @@
     function autoWebFullscreen() {
         if (!config.autoWebFullscreen) return;
 
-        let attempts = 0;
-        const interval = setInterval(() => {
-            if (++attempts > 20) { clearInterval(interval); return; }
-
+        retry(() => {
             const btn = document.querySelector(
                 '[class*="wfs"], [class*="WebScreen"], .controlbar-item-wfs, [title="网页全屏"]'
             );
             if (btn) {
                 btn.click();
-                clearInterval(interval);
+                return true;
             }
-        }, 1000);
+            return false;
+        }, 1000, 20);
+    }
+
+    // ========================
+    //  首页自动直播清理
+    // ========================
+    function cleanHomepagePlayer() {
+        if (!isHomepage) return;
+
+        // 查找所有 video 元素并暂停、静音、断开源链接，防止后台播放发声
+        document.querySelectorAll('video').forEach(video => {
+            try {
+                video.pause();
+                video.muted = true;
+                video.src = '';
+                video.srcObject = null;
+                video.load();
+            } catch (e) { /* ignore */ }
+        });
+
+        // 查找首页播放器容器相关元素，并静音/暂停内部的所有 video
+        HOMEPAGE_PLAYER_SELECTORS.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => {
+                el.querySelectorAll('video').forEach(v => {
+                    try {
+                        v.pause();
+                        v.muted = true;
+                        v.src = '';
+                        v.srcObject = null;
+                        v.load();
+                    } catch (e) { /* ignore */ }
+                });
+            });
+        });
     }
 
     // ========================
@@ -642,9 +697,24 @@
             for (const mutation of mutations) {
                 for (const node of mutation.addedNodes) {
                     if (node.nodeType !== 1) continue;
+
+                    // 首页新插入了视频或播放器容器，则执行强力清理
+                    if (isHomepage && (
+                        node.tagName === 'VIDEO' ||
+                        node.querySelector('video') ||
+                        HOMEPAGE_PLAYER_SELECTORS.some(sel => {
+                            try {
+                                return (node.matches && node.matches(sel)) || (node.querySelector && node.querySelector(sel));
+                            } catch (e) {
+                                return false;
+                            }
+                        })
+                    )) {
+                        cleanHomepagePlayer();
+                    }
+
                     if (OBSERVER_CLASS_LIST.some(cls => node.classList?.contains(cls))) {
                         node.style.display = 'none';
-                        try { node.remove(); } catch (e) { /* ignore */ }
                     }
                 }
             }
@@ -691,17 +761,10 @@
         const panel = document.createElement('div');
         panel.id = 'douyu-beautify-panel';
 
-        let html = `
-            <div class="panel-header">
-                <h3>⚡ 斗鱼美化设置</h3>
-                <button class="panel-close" id="beautify-panel-close">✕</button>
-            </div>
-            <div class="panel-body">`;
-
-        for (const group of SETTINGS_GROUPS) {
-            html += `<div class="setting-group"><div class="setting-group-title">${group.group}</div>`;
-            for (const item of group.items) {
-                html += `
+        const bodyHtml = SETTINGS_GROUPS.map(group => `
+            <div class="setting-group">
+                <div class="setting-group-title">${group.group}</div>
+                ${group.items.map(item => `
                     <div class="setting-item">
                         <div>
                             <div class="setting-label">${item.label}</div>
@@ -711,18 +774,22 @@
                             <input type="checkbox" data-key="${item.key}" ${config[item.key] ? 'checked' : ''}>
                             <span class="toggle-slider"></span>
                         </label>
-                    </div>`;
-            }
-            html += '</div>';
-        }
+                    </div>
+                `).join('')}
+            </div>
+        `).join('');
 
-        html += `</div>
+        panel.innerHTML = `
+            <div class="panel-header">
+                <h3>⚡ 斗鱼美化设置</h3>
+                <button class="panel-close" id="beautify-panel-close">✕</button>
+            </div>
+            <div class="panel-body">${bodyHtml}</div>
             <div class="panel-footer">
                 <span class="hint">快捷键 <kbd>Alt</kbd>+<kbd>S</kbd> 打开设置</span>
                 <button class="apply-btn" id="beautify-apply">应用并刷新</button>
-            </div>`;
-
-        panel.innerHTML = html;
+            </div>
+        `;
         document.body.appendChild(panel);
 
         // 事件绑定
@@ -806,6 +873,7 @@
     //  初始化
     // ========================
     onDomReady(() => {
+        if (isHomepage) cleanHomepagePlayer();
         applyStyles();
         forceRemoveElements();
         createSettingsPanel();
@@ -814,7 +882,9 @@
     });
 
     onPageLoaded(() => {
+        if (isHomepage) cleanHomepagePlayer();
         setTimeout(() => {
+            if (isHomepage) cleanHomepagePlayer();
             forceRemoveElements();
             applyStyles();
         }, 500);
@@ -826,7 +896,10 @@
         }, 2000);
 
         // 第三次清理（处理懒加载内容）
-        setTimeout(() => forceRemoveElements(), 5000);
+        setTimeout(() => {
+            if (isHomepage) cleanHomepagePlayer();
+            forceRemoveElements();
+        }, 5000);
     });
 
     console.log(
