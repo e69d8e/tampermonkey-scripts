@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         斗鱼直播美化 - 极简纯净版
 // @namespace    https://github.com/douyu-beautification
-// @version      1.3.0
+// @version      0.0.1
 // @description  斗鱼直播间极简美化：移除广告、礼物栏、侧边推荐、活动弹窗等冗余元素，保留纯净的直播观看体验。支持自动最高画质、顶栏设置按钮、设置即时热生效。
 // @author       YH
 // @match        *://www.douyu.com/*
@@ -527,10 +527,11 @@
             #douyu-beautify-header-btn {
                 display: inline-flex !important;
                 align-items: center !important;
+                align-self: center !important;
                 gap: 5px !important;
                 height: 32px !important;
                 padding: 0 12px !important;
-                margin: 14px 8px !important;
+                margin: 0 8px !important;
                 background: rgba(255, 255, 255, 0.08) !important;
                 border: 1px solid rgba(255, 255, 255, 0.14) !important;
                 border-radius: 16px !important;
@@ -541,107 +542,297 @@
                 transition: all 0.25s ease !important;
                 user-select: none !important;
                 flex-shrink: 0 !important;
-                z-index: 100 !important;
+                z-index: 1000 !important;
+                position: relative !important;
+                visibility: visible !important;
+                opacity: 1 !important;
             }
-            #douyu-beautify-header-btn:hover {
-                background: rgba(238, 9, 121, 0.2) !important;
-                border-color: rgba(238, 9, 121, 0.5) !important;
+            #douyu-beautify-header-btn:hover,
+            #douyu-beautify-header-btn.is-active {
+                background: rgba(255, 93, 35, 0.16) !important;
+                border-color: rgba(255, 93, 35, 0.45) !important;
                 color: #fff !important;
                 transform: translateY(-1px) !important;
-                box-shadow: 0 4px 12px rgba(238, 9, 121, 0.25) !important;
+                box-shadow: 0 4px 12px rgba(255, 93, 35, 0.25) !important;
             }
             #douyu-beautify-header-btn svg {
                 width: 14px !important;
                 height: 14px !important;
                 fill: #ff6a00 !important;
                 transition: transform 0.3s ease !important;
+                flex-shrink: 0 !important;
             }
-            #douyu-beautify-header-btn:hover svg {
+            #douyu-beautify-header-btn:hover svg,
+            #douyu-beautify-header-btn.is-active svg {
                 transform: rotate(45deg) !important;
             }
+            #douyu-beautify-header-btn span {
+                white-space: nowrap !important;
+                line-height: 1 !important;
+                color: inherit !important;
+            }
 
-            /* ========== 设置面板 ========== */
+            /* ========== 设置面板 Popover ========== */
             #douyu-beautify-panel {
-                position: fixed; top: 50%; left: 50%;
-                transform: translate(-50%, -50%) scale(0.95);
-                z-index: 999999; width: 440px; max-height: 85vh;
-                background: rgba(18, 18, 26, 0.97);
-                backdrop-filter: blur(20px) saturate(180%);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 16px;
-                box-shadow: 0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05) inset, 0 0 80px rgba(238,9,121,0.08);
-                overflow: hidden; opacity: 0; pointer-events: none;
-                transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+                position: fixed;
+                z-index: 999999;
+                width: 350px;
+                max-height: calc(100vh - 72px);
+                background: rgba(18, 19, 28, 0.94);
+                backdrop-filter: blur(28px) saturate(190%);
+                -webkit-backdrop-filter: blur(28px) saturate(190%);
+                border: 1px solid rgba(255, 255, 255, 0.09);
+                border-radius: 14px;
+                box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05) inset, 0 4px 12px rgba(0,0,0,0.25);
+                overflow: hidden;
+                opacity: 0;
+                pointer-events: none;
+                transform: translateY(-8px) scale(0.97);
+                transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                display: flex;
+                flex-direction: column;
             }
-            #douyu-beautify-panel.is-visible { opacity: 1; pointer-events: all; transform: translate(-50%, -50%) scale(1); }
+            #douyu-beautify-panel.is-visible {
+                opacity: 1;
+                pointer-events: all;
+                transform: translateY(0) scale(1);
+            }
             #douyu-beautify-panel .panel-header {
-                display: flex; align-items: center; justify-content: space-between;
-                padding: 18px 24px 14px; border-bottom: 1px solid rgba(255,255,255,0.06);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 12px 16px 10px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.06);
             }
-            #douyu-beautify-panel .panel-header h3 {
-                margin: 0; font-size: 17px; font-weight: 700;
-                background: linear-gradient(135deg, #ff6a00, #ee0979);
-                -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-                background-clip: text; letter-spacing: 0.5px;
+            #douyu-beautify-panel .panel-title-wrap {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            #douyu-beautify-panel .panel-icon-badge {
+                width: 24px;
+                height: 24px;
+                border-radius: 7px;
+                background: linear-gradient(135deg, rgba(255, 93, 35, 0.25), rgba(255, 41, 102, 0.25));
+                border: 1px solid rgba(255, 93, 35, 0.4);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 13px;
+                color: #ff5d23;
+                line-height: 1;
+            }
+            #douyu-beautify-panel .panel-title {
+                font-size: 14px;
+                font-weight: 600;
+                color: rgba(255, 255, 255, 0.95);
+                letter-spacing: 0.2px;
+            }
+            #douyu-beautify-panel .panel-version {
+                font-size: 10px;
+                font-weight: 600;
+                color: rgba(255, 255, 255, 0.4);
+                background: rgba(255, 255, 255, 0.08);
+                padding: 1px 5px;
+                border-radius: 4px;
+                margin-left: 6px;
+                vertical-align: middle;
             }
             #douyu-beautify-panel .panel-close {
-                width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
-                border: none; background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6);
-                border-radius: 8px; cursor: pointer; font-size: 16px; transition: all 0.2s ease; line-height: 1;
+                width: 26px;
+                height: 26px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: none;
+                background: rgba(255, 255, 255, 0.06);
+                color: rgba(255, 255, 255, 0.5);
+                border-radius: 50%;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                padding: 0;
             }
-            #douyu-beautify-panel .panel-close:hover { background: rgba(255,59,48,0.2); color: #ff3b30; }
-            #douyu-beautify-panel .panel-body { padding: 14px 24px 20px; overflow-y: auto; max-height: 60vh; }
-            #douyu-beautify-panel .setting-group { margin-bottom: 12px; }
-            #douyu-beautify-panel .setting-group-title {
-                font-size: 11px; font-weight: 600; text-transform: uppercase;
-                letter-spacing: 1.5px; color: rgba(255,255,255,0.35); margin-bottom: 8px; padding-left: 2px;
+            #douyu-beautify-panel .panel-close:hover {
+                background: rgba(255, 255, 255, 0.12);
+                color: #fff;
+            }
+            #douyu-beautify-panel .panel-tabs {
+                display: flex;
+                padding: 8px 12px 4px;
+                gap: 6px;
+                background: rgba(0, 0, 0, 0.15);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            #douyu-beautify-panel .panel-tab {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                padding: 6px 10px;
+                border: none;
+                background: transparent;
+                border-radius: 8px;
+                color: rgba(255, 255, 255, 0.55);
+                font-size: 12px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            #douyu-beautify-panel .panel-tab:hover {
+                color: rgba(255, 255, 255, 0.85);
+                background: rgba(255, 255, 255, 0.04);
+            }
+            #douyu-beautify-panel .panel-tab.is-active {
+                background: rgba(255, 255, 255, 0.1);
+                color: #fff;
+                font-weight: 600;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            }
+            #douyu-beautify-panel .tab-badge {
+                font-size: 10px;
+                background: rgba(255, 255, 255, 0.1);
+                padding: 1px 5px;
+                border-radius: 10px;
+                opacity: 0.8;
+            }
+            #douyu-beautify-panel .panel-tab.is-active .tab-badge {
+                background: rgba(255, 93, 35, 0.3);
+                color: #ff7a45;
+            }
+            #douyu-beautify-panel .panel-body {
+                padding: 4px 8px;
+                overflow-y: auto;
+                max-height: 480px;
+            }
+            #douyu-beautify-panel .panel-body::-webkit-scrollbar {
+                width: 4px;
+            }
+            #douyu-beautify-panel .panel-body::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.15);
+                border-radius: 2px;
+            }
+            #douyu-beautify-panel .setting-group {
+                display: none;
+            }
+            #douyu-beautify-panel .setting-group.is-active {
+                display: block;
             }
             #douyu-beautify-panel .setting-item {
-                display: flex; align-items: center; justify-content: space-between;
-                padding: 9px 12px; margin-bottom: 3px; border-radius: 10px; transition: background 0.2s ease;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 6px 8px;
+                margin-bottom: 1px;
+                border-radius: 7px;
+                transition: background 0.18s ease;
             }
-            #douyu-beautify-panel .setting-item:hover { background: rgba(255,255,255,0.04); }
-            #douyu-beautify-panel .setting-label { font-size: 13.5px; color: rgba(255,255,255,0.85); font-weight: 500; }
-            #douyu-beautify-panel .setting-desc { font-size: 11px; color: rgba(255,255,255,0.38); margin-top: 2px; }
-            #douyu-beautify-panel .toggle-switch { position: relative; width: 42px; height: 22px; flex-shrink: 0; margin-left: 12px; }
-            #douyu-beautify-panel .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+            #douyu-beautify-panel .setting-item:hover {
+                background: rgba(255, 255, 255, 0.06);
+            }
+            #douyu-beautify-panel .setting-label {
+                font-size: 12.5px;
+                color: rgba(255, 255, 255, 0.92);
+                font-weight: 500;
+                line-height: 1.25;
+            }
+            #douyu-beautify-panel .setting-desc {
+                font-size: 10.5px;
+                color: rgba(255, 255, 255, 0.4);
+                margin-top: 1px;
+                line-height: 1.2;
+            }
+            #douyu-beautify-panel .toggle-switch {
+                position: relative;
+                width: 36px;
+                height: 20px;
+                flex-shrink: 0;
+                margin-left: 10px;
+            }
+            #douyu-beautify-panel .toggle-switch input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+                position: absolute;
+            }
             #douyu-beautify-panel .toggle-slider {
-                position: absolute; cursor: pointer; inset: 0;
-                background: rgba(255,255,255,0.12); border-radius: 11px;
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                position: absolute;
+                cursor: pointer;
+                inset: 0;
+                background: rgba(255, 255, 255, 0.14);
+                border-radius: 10px;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             }
             #douyu-beautify-panel .toggle-slider::before {
-                position: absolute; content: ''; height: 16px; width: 16px;
-                left: 3px; bottom: 3px; background: rgba(255,255,255,0.7);
-                border-radius: 50%; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                position: absolute;
+                content: '';
+                height: 16px;
+                width: 16px;
+                left: 2px;
+                bottom: 2px;
+                background: #fff;
+                border-radius: 50%;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
             }
             #douyu-beautify-panel .toggle-switch input:checked + .toggle-slider {
-                background: linear-gradient(135deg, #ff6a00, #ee0979);
+                background: #ff5d23;
+                box-shadow: 0 2px 8px rgba(255, 93, 35, 0.35);
             }
             #douyu-beautify-panel .toggle-switch input:checked + .toggle-slider::before {
-                transform: translateX(20px); background: #fff;
+                transform: translateX(16px);
             }
             #douyu-beautify-panel .panel-footer {
-                padding: 12px 24px 16px; border-top: 1px solid rgba(255,255,255,0.06);
-                display: flex; align-items: center; justify-content: space-between;
+                padding: 10px 14px;
+                border-top: 1px solid rgba(255, 255, 255, 0.06);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                background: rgba(0, 0, 0, 0.15);
             }
-            #douyu-beautify-panel .panel-footer .hint { font-size: 11px; color: rgba(255,255,255,0.45); }
-            #douyu-beautify-panel .panel-footer .apply-btn {
-                padding: 6px 18px; border: none; border-radius: 8px;
-                background: linear-gradient(135deg, #ff6a00, #ee0979);
-                color: #fff; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;
+            #douyu-beautify-panel .reset-btn {
+                background: transparent;
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                color: rgba(255, 255, 255, 0.55);
+                font-size: 11px;
+                padding: 4px 10px;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.2s ease;
             }
-            #douyu-beautify-panel .panel-footer .apply-btn:hover {
-                transform: scale(1.05); box-shadow: 0 4px 15px rgba(238,9,121,0.4);
+            #douyu-beautify-panel .reset-btn:hover {
+                border-color: rgba(255, 255, 255, 0.25);
+                color: rgba(255, 255, 255, 0.85);
+                background: rgba(255, 255, 255, 0.04);
+            }
+            #douyu-beautify-panel .apply-btn {
+                padding: 5px 14px;
+                border: none;
+                border-radius: 6px;
+                background: linear-gradient(135deg, #ff5d23, #ff3366);
+                color: #fff;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 8px rgba(255, 93, 35, 0.3);
+            }
+            #douyu-beautify-panel .apply-btn:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 14px rgba(255, 93, 35, 0.45);
             }
             #douyu-beautify-overlay {
-                position: fixed; inset: 0; z-index: 999998;
-                background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-                opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+                position: fixed;
+                inset: 0;
+                z-index: 999998;
+                background: transparent;
+                opacity: 0;
+                pointer-events: none;
             }
-            #douyu-beautify-overlay.is-visible { opacity: 1; pointer-events: all; }
+            #douyu-beautify-overlay.is-visible {
+                pointer-events: all;
+            }
 
             /* ========== 聊天面板 ========== */
             .layout-Player-aside.beautified-chat, [class*="sidebar__"].beautified-chat {
@@ -649,20 +840,35 @@
                 border-left: 1px solid rgba(255,255,255,0.06) !important;
             }
 
-            /* ========== Toast ========== */
+            /* ========== Toast 提示 ========== */
             #douyu-beautify-toast {
-                position: fixed; top: 20px; left: 50%;
-                transform: translateX(-50%) translateY(-100px);
-                z-index: 9999999; padding: 9px 20px;
-                background: rgba(18,18,26,0.95); backdrop-filter: blur(10px);
-                border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
-                color: rgba(255,255,255,0.9); font-size: 13px; font-weight: 500;
-                box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-                transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+                position: fixed;
+                top: 24px;
+                left: 50%;
+                transform: translateX(-50%) translateY(-20px);
+                z-index: 9999999;
+                padding: 7px 18px;
+                background: rgba(22, 23, 34, 0.94);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 20px;
+                color: rgba(255, 255, 255, 0.95);
+                font-size: 12.5px;
+                font-weight: 500;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+                opacity: 0;
+                transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                 pointer-events: none;
+                display: flex;
+                align-items: center;
+                gap: 6px;
             }
-            #douyu-beautify-toast.is-visible { transform: translateX(-50%) translateY(0); }
+            #douyu-beautify-toast.is-visible {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
         `;
     }
 
@@ -679,9 +885,15 @@
             if (typeof GM_addStyle !== 'undefined') {
                 dynamicStyleEl = GM_addStyle(cssText);
             } else {
-                dynamicStyleEl = document.createElement('style');
-                dynamicStyleEl.textContent = cssText;
-                (document.head || document.documentElement).appendChild(dynamicStyleEl);
+                const target = document.head || document.documentElement || document.body;
+                if (target) {
+                    dynamicStyleEl = document.createElement('style');
+                    dynamicStyleEl.textContent = cssText;
+                    target.appendChild(dynamicStyleEl);
+                } else {
+                    onDomReady(applyStyles);
+                    return;
+                }
             }
         }
         setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
@@ -720,14 +932,14 @@
     //  Toast 提示
     // ==========================================
     let toastTimer = null;
-    function showToast(message, duration = 2000) {
+    function showToast(message, duration = 1800) {
         let toast = document.getElementById('douyu-beautify-toast');
         if (!toast) {
             toast = document.createElement('div');
             toast.id = 'douyu-beautify-toast';
             document.body.appendChild(toast);
         }
-        toast.textContent = message;
+        toast.innerHTML = `<span style="color:#ff5d23;font-size:14px;line-height:1;font-weight:bold;">✓</span><span>${message}</span>`;
         toast.classList.add('is-visible');
         clearTimeout(toastTimer);
         toastTimer = setTimeout(() => toast?.classList.remove('is-visible'), duration);
@@ -928,6 +1140,8 @@
     const SETTINGS_GROUPS = [
         {
             group: '界面元素清理',
+            id: 'clean',
+            count: 10,
             items: [
                 { key: 'removeHeader', label: '精简顶部导航', desc: '仅保留搜索、关注、消息、头像' },
                 { key: 'removeAside', label: '移除右侧边栏', desc: '隐藏弹幕/聊天区域' },
@@ -935,16 +1149,18 @@
                 { key: 'removeFooter', label: '移除页脚', desc: '隐藏底部页脚与版权信息' },
                 { key: 'removeAds', label: '移除广告', desc: '屏蔽全站横幅及活动广告' },
                 { key: 'removeWatermark', label: '移除水印', desc: '隐藏播放器右上角水印' },
-                { key: 'removeActivity', label: '移除活动弹窗与皮肤', desc: '屏蔽任务/抽奖及活动置顶皮肤背景' },
-                { key: 'removeSideBanner', label: '移除侧边横幅与浮动工具', desc: '隐藏浮动按钮和侧边工具条' },
-                { key: 'removeRecommend', label: '精简视频下方与遮挡', desc: '移除任务大厅、游戏租号、互动横条等' },
-                { key: 'removeTopBar', label: '精简信息栏', desc: '移除粉丝勋章、贵族图标、主播等级等' },
+                { key: 'removeActivity', label: '移除活动与皮肤', desc: '屏蔽任务/抽奖及活动置顶皮肤背景' },
+                { key: 'removeSideBanner', label: '移除侧边工具条', desc: '隐藏侧边横幅与浮动工具' },
+                { key: 'removeRecommend', label: '精简下方与遮挡', desc: '移除任务大厅、游戏租号、互动横条' },
+                { key: 'removeTopBar', label: '精简信息栏', desc: '移除粉丝勋章、贵族图标、主播等级' },
             ]
         },
         {
-            group: '功能与播放增强',
+            group: '播放与功能增强',
+            id: 'player',
+            count: 4,
             items: [
-                { key: 'playerExpand', label: '播放器扩展大窗', desc: '非全屏自适应 16:9 居中，全屏 100% 满屏' },
+                { key: 'playerExpand', label: '播放器扩展大窗', desc: '普通模式 16:9 居中大窗，全屏 100% 满屏' },
                 { key: 'autoHighQuality', label: '自动最高画质', desc: '进入直播间自动选择最高可用画质' },
                 { key: 'autoWebFullscreen', label: '自动网页全屏', desc: '进入直播间后自动切换网页全屏' },
                 { key: 'showChatPanel', label: '保留聊天面板', desc: '保留右侧弹幕聊天区（覆盖侧边栏移除）' },
@@ -952,21 +1168,53 @@
         }
     ];
 
-    let panelVisible = false;
+    function ensureSettingsPanel() {
+        if (!document.getElementById('douyu-beautify-panel')) {
+            createSettingsPanel();
+        }
+    }
 
-    function togglePanel() {
-        panelVisible = !panelVisible;
+    function updatePanelPosition() {
+        const btn = document.getElementById('douyu-beautify-header-btn');
+        const panel = document.getElementById('douyu-beautify-panel');
+        if (!panel) return;
+        if (btn && btn.offsetParent !== null) {
+            const rect = btn.getBoundingClientRect();
+            panel.style.top = `${Math.round(rect.bottom + 8)}px`;
+            panel.style.right = `${Math.max(16, Math.round(window.innerWidth - rect.right))}px`;
+            panel.style.left = 'auto';
+        } else {
+            panel.style.top = '60px';
+            panel.style.right = '20px';
+            panel.style.left = 'auto';
+        }
+    }
+
+    function togglePanel(force) {
+        ensureSettingsPanel();
         const panel = document.getElementById('douyu-beautify-panel');
         const overlay = document.getElementById('douyu-beautify-overlay');
-        if (panel) panel.classList.toggle('is-visible', panelVisible);
-        if (overlay) overlay.classList.toggle('is-visible', panelVisible);
+        const btn = document.getElementById('douyu-beautify-header-btn');
+        if (!panel) return;
+        const willBeVisible = typeof force === 'boolean' ? force : !panel.classList.contains('is-visible');
+        if (willBeVisible) {
+            updatePanelPosition();
+        }
+        panel.classList.toggle('is-visible', willBeVisible);
+        if (overlay) overlay.classList.toggle('is-visible', willBeVisible);
+        if (btn) btn.classList.toggle('is-active', willBeVisible);
     }
 
     function createHeaderSettingsButton() {
         retry(() => {
             if (document.getElementById('douyu-beautify-header-btn')) return true;
 
-            const headerTarget = document.querySelector('.Header-right, [class*="right__"], .Header-wrap, #js-header');
+            const headerTarget = document.querySelector('.Header-right') ||
+                                 document.querySelector('#js-header [class*="right__"]') ||
+                                 document.querySelector('[class*="header__"] [class*="right__"]') ||
+                                 document.querySelector('[class*="right__"]') ||
+                                 document.querySelector('.Header-wrap .Header') ||
+                                 document.querySelector('.Header');
             if (!headerTarget) return false;
 
             const btn = document.createElement('div');
@@ -979,13 +1227,27 @@
                 <span>美化设置</span>
             `;
 
-            btn.addEventListener('click', togglePanel);
-            headerTarget.insertBefore(btn, headerTarget.firstChild);
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                togglePanel();
+            });
+
+            if (headerTarget.classList.contains('Header-right') || (typeof headerTarget.className === 'string' && headerTarget.className.includes('right__'))) {
+                headerTarget.insertBefore(btn, headerTarget.firstChild);
+            } else {
+                headerTarget.appendChild(btn);
+            }
             return true;
-        }, 800, 15);
+        }, 800, 20);
     }
 
     function createSettingsPanel() {
+        if (document.getElementById('douyu-beautify-panel')) return;
+        if (!document.body) {
+            onDomReady(createSettingsPanel);
+            return;
+        }
+
         const overlay = document.createElement('div');
         overlay.id = 'douyu-beautify-overlay';
         document.body.appendChild(overlay);
@@ -993,9 +1255,23 @@
         const panel = document.createElement('div');
         panel.id = 'douyu-beautify-panel';
 
-        const bodyHtml = SETTINGS_GROUPS.map(group => `
-            <div class="setting-group">
-                <div class="setting-group-title">${group.group}</div>
+        const tabsHtml = `
+            <div class="panel-tabs">
+                <button class="panel-tab is-active" data-tab="clean">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                    <span>界面净化</span>
+                    <span class="tab-badge">10</span>
+                </button>
+                <button class="panel-tab" data-tab="player">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <span>播放体验</span>
+                    <span class="tab-badge">4</span>
+                </button>
+            </div>
+        `;
+
+        const bodyHtml = SETTINGS_GROUPS.map((group, idx) => `
+            <div class="setting-group ${idx === 0 ? 'is-active' : ''}" data-tab="${group.id}">
                 ${group.items.map(item => `
                     <div class="setting-item">
                         <div>
@@ -1013,34 +1289,77 @@
 
         panel.innerHTML = `
             <div class="panel-header">
-                <h3>⚡ 斗鱼美化设置</h3>
-                <button class="panel-close" id="beautify-panel-close">✕</button>
+                <div class="panel-title-wrap">
+                    <div class="panel-icon-badge">⚡</div>
+                    <div>
+                        <span class="panel-title">斗鱼美化设置</span>
+                        <span class="panel-version">v0.0.1</span>
+                    </div>
+                </div>
+                <button class="panel-close" id="beautify-panel-close" title="关闭">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
             </div>
+            ${tabsHtml}
             <div class="panel-body">${bodyHtml}</div>
             <div class="panel-footer">
-                <span class="hint">随时点击顶部“美化设置”打开</span>
-                <button class="apply-btn" id="beautify-apply">保存并刷新</button>
+                <button class="reset-btn" id="beautify-reset" title="恢复为默认设置">恢复默认</button>
+                <button class="apply-btn" id="beautify-apply" title="保存当前设置并刷新页面">保存并刷新</button>
             </div>
         `;
         document.body.appendChild(panel);
 
-        // 事件绑定
-        overlay.addEventListener('click', togglePanel);
-        document.getElementById('beautify-panel-close').addEventListener('click', togglePanel);
+        // 事件绑定：点击遮罩/空白处关闭
+        overlay.addEventListener('click', () => togglePanel(false));
+        const closeBtn = document.getElementById('beautify-panel-close');
+        if (closeBtn) closeBtn.addEventListener('click', () => togglePanel(false));
 
+        // 选项卡切换
+        panel.querySelectorAll('.panel-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                panel.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('is-active'));
+                panel.querySelectorAll('.setting-group').forEach(g => g.classList.remove('is-active'));
+                tab.classList.add('is-active');
+                const targetGroup = panel.querySelector(`.setting-group[data-tab="${tab.dataset.tab}"]`);
+                if (targetGroup) targetGroup.classList.add('is-active');
+            });
+        });
+
+        // 开关变更
         panel.querySelectorAll('input[type="checkbox"]').forEach(input => {
             input.addEventListener('change', () => {
                 config[input.dataset.key] = input.checked;
                 saveConfig(config);
                 applyStyles();
                 forceRemoveElements();
-                showToast(`已${input.checked ? '开启' : '关闭'}: ${input.closest('.setting-item').querySelector('.setting-label').textContent}`);
+                const label = input.closest('.setting-item')?.querySelector('.setting-label')?.textContent || '';
+                showToast(`已${input.checked ? '开启' : '关闭'}: ${label}`);
             });
         });
 
-        document.getElementById('beautify-apply').addEventListener('click', () => {
+        // 恢复默认设置
+        document.getElementById('beautify-reset')?.addEventListener('click', () => {
+            config = Object.assign({}, DEFAULT_CONFIG);
+            saveConfig(config);
+            panel.querySelectorAll('input[type="checkbox"]').forEach(input => {
+                input.checked = !!config[input.dataset.key];
+            });
+            applyStyles();
+            forceRemoveElements();
+            showToast('已恢复为默认设置');
+        });
+
+        // 保存并刷新
+        document.getElementById('beautify-apply')?.addEventListener('click', () => {
             saveConfig(config);
             location.reload();
+        });
+
+        // 窗口大小变化时更新面板位置
+        window.addEventListener('resize', () => {
+            if (panel.classList.contains('is-visible')) {
+                updatePanelPosition();
+            }
         });
     }
 
@@ -1073,6 +1392,7 @@
             if (isHomepage) cleanHomepagePlayer();
             forceRemoveElements();
             applyStyles();
+            createSettingsPanel();
             createHeaderSettingsButton();
         }, 500);
 
@@ -1086,12 +1406,13 @@
         setTimeout(() => {
             if (isHomepage) cleanHomepagePlayer();
             forceRemoveElements();
+            createSettingsPanel();
             createHeaderSettingsButton();
         }, 5000);
     });
 
     console.log(
-        '%c ⚡ 斗鱼美化 v1.3.0 已加载 %c 顶部导航栏可直接打开设置 ',
+        '%c ⚡ 斗鱼美化 v0.0.1 已加载 %c 顶部导航栏可直接打开设置 ',
         'background: linear-gradient(135deg, #ff6a00, #ee0979); color: #fff; padding: 4px 8px; border-radius: 4px 0 0 4px; font-weight: bold;',
         'background: #12121a; color: #ee0979; padding: 4px 8px; border-radius: 0 4px 4px 0; border: 1px solid #ee0979;'
     );

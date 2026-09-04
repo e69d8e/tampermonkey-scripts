@@ -13,9 +13,8 @@ The script follows a linear pipeline inside one IIFE:
 1. **Config management** — `DEFAULT_CONFIG` → `getConfig()` merges saved values via `GM_getValue` → `saveConfig()` persists with `GM_setValue`
 2. **CSS injection** — `generateBaseCSS()` (always-on dark theme + settings panel styles) + `generateHideCSS()` (config-driven `display:none` rules) → combined and injected via `GM_addStyle` at `document-start` to prevent FOUC
 3. **DOM cleanup** — `forceRemoveElements()` does `.remove()` on hard-to-hide elements; `MutationObserver` catches dynamically injected ads/popups
-4. **Automation** — `autoHighQuality()` and `autoWebFullscreen()` poll for player UI elements with `setInterval` (retries ~15-20 times)
-5. **Settings panel** — built entirely in `createSettingsPanel()`, toggled via `Alt+S` or floating trigger button
-6. **Keyboard shortcuts** — global `keydown` listener; single-letter shortcuts (`W`/`F`/`D`/`M`) are disabled when an input is focused
+5. **Settings panel** — built entirely in `createSettingsPanel()`, toggled via the top navigation bar button (`createHeaderSettingsButton()`) or Tampermonkey menu (`GM_registerMenuCommand`)
+6. **Automation** — `autoHighQuality()` and `autoWebFullscreen()` poll for player UI elements with `setInterval` (retries ~15-20 times)
 
 Key Tampermonkey APIs used: `GM_addStyle`, `GM_getValue`, `GM_setValue`, `GM_registerMenuCommand`.
 
