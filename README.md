@@ -11,10 +11,17 @@
 
 ## 脚本矩阵
 
-| 脚本工程 | 版本 | 目标平台匹配 | 核心特性 | 一键安装 / 源文件 | 文档 |
+> [!IMPORTANT]
+> **⚡ 一键安装前置条件**：
+> 油猴脚本（`.user.js`）无法在裸浏览器中直接运行。在点击下方「一键安装」链接前，**必须先在浏览器中安装并启用脚本管理器扩展（[篡改猴 Tampermonkey](https://www.tampermonkey.net/) 或 [脚本猫 ScriptCat](https://scriptcat.org/) 二选一）**。
+> - **已安装扩展**：点击下方链接，扩展会自动拦截并弹出脚本安装确认窗口，点击“安装”即可。
+> - **未安装扩展**：点击链接将只显示纯文本代码或直接下载文件。请先前往下方 [前置管理器安装教程](#1-前置运行环境准备已装扩展可跳过) 安装扩展。
+
+| 脚本工程 | 版本 | 目标平台匹配 | 核心特性 | 一键安装 (需已装扩展) | 详细教程 |
 |---|:---:|---|---|:---:|:---:|
-| **[学习通AI自动答题](./automatic-AI-answer-system-for-xxt)** | `0.0.1` | `*://*.chaoxing.com/*`<br>`*://*.edu.cn/*` | • WOFF 动态字体解密<br>• 单选/多选/判断/填空/简答全题型支持<br>• 富文本 iframe / UEditor 自动回填<br>• DeepSeek & MiMo 双驱动 / 自定义端点 | [⚡ 安装脚本](https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js) | [使用教程](./automatic-AI-answer-system-for-xxt/README.md) |
-| **[斗鱼直播美化](./douyu-beautification)** | `0.0.1` | `*://www.douyu.com/*`<br>`*://douyu.com/*` | • `document-start` 零闪烁 CSS 注入<br>• 10 项全方位界面冗余元素净化<br>• 16:9 居中自适应大窗 / 100% 满屏<br>• 顶栏即时设置面板 & 实时热切换 | [⚡ 安装脚本](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js) | [使用教程](./douyu-beautification/README.md) |
+| **[学习通AI自动答题](./automatic-AI-answer-system-for-xxt)** | `0.0.1` | `*://*.chaoxing.com/*`<br>`*://*.edu.cn/*` | • WOFF 动态字体解密<br>• 单选/多选/判断/填空/简答全题型支持<br>• 富文本 iframe / UEditor 自动回填<br>• DeepSeek & MiMo 双驱动 / 自定义端点 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js) | [使用教程](./automatic-AI-answer-system-for-xxt/README.md) |
+| **[斗鱼直播美化](./douyu-beautification)** | `0.0.1` | `*://www.douyu.com/*`<br>`*://douyu.com/*` | • `document-start` 零闪烁 CSS 注入<br>• 10 项全方位界面冗余元素净化<br>• 16:9 居中自适应大窗 / 100% 满屏<br>• 顶栏即时设置面板 & 实时热切换 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js) | [使用教程](./douyu-beautification/README.md) |
+
 
 ---
 
@@ -240,18 +247,34 @@ tampermonkey-scripts/
 
 ## 环境搭建与安装指南
 
-### 1. 前置运行环境准备
-1. 建议使用基于 Chromium 现代内核的浏览器（Chrome、Edge、Brave、Arc）或 Firefox。
-2. 安装扩展商店官方发布的 [Tampermonkey](https://www.tampermonkey.net/)。
+### 1. 前置运行环境准备（已装扩展可跳过）
 
-### 2. 快速安装方式
-直接点击下方链接即可调起油猴原生的代码安装审查窗口：
-- 📦 **[安装《学习通AI自动答题》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js)**
-- 📦 **[安装《斗鱼直播美化》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js)**
+用户脚本（`.user.js`）无法独立运行，必须依托浏览器中的脚本管理器。推荐以下两款主流扩展（**二选一安装即可**）：
 
-### 3. 手动导入方式
-1. 打开 Tampermonkey **管理面板** -> **实用工具**。
-2. 在「从文件导入」中直接拖入本地 `.user.js` 文件，或在「从 URL 安装」中粘贴原始文件的 Raw 链接。
+| 脚本管理器 | 特点与推荐场景 | 官方下载 / 安装商店链接 |
+|---|---|---|
+| **篡改猴 (Tampermonkey)** | 全球使用量最大的老牌油猴扩展，兼容性强、功能成熟 | [官网入口](https://www.tampermonkey.net/)<br>• [Edge 商店 (推荐)](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)<br>• [Chrome Web Store](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)<br>• [Firefox 附加组件](https://addons.mozilla.org/firefox/addon/tampermonkey/) |
+| **脚本猫 (ScriptCat)** | 国内开源优秀现代脚本管理器，无需特殊网络访问，对国内平台优化好 | [官网入口](https://scriptcat.org/)<br>• [Edge 商店 (推荐)](https://microsoftedge.microsoft.com/addons/detail/%E8%84%9A%E6%9C%AC%E7%8C%AB/liilgpjgabokdklappibcjfablkpcekh)<br>• [Chrome Web Store](https://chromewebstore.google.com/detail/%E8%84%9A%E6%9C%AC%E7%8C%AB/ndjpnnhakmfoccggihnmidhidhkgkien)<br>• [Firefox 附加组件](https://addons.mozilla.org/zh-CN/firefox/addon/scriptcat/) |
+
+> 📌 **建议**：安装扩展后，请在浏览器工具栏将「篡改猴」或「脚本猫」图标点击图钉固定，确保扩展处于已启用状态。
+
+---
+
+### 2. 脚本一键自动安装（最推荐 ⚡）
+
+当您的浏览器已安装上述任一扩展后，直接点击下方对应脚本链接。扩展将自动拦截请求并唤起安装审查界面，点击 **“安装”**（若已安装则为“更新”）即可一键就绪：
+
+- 📦 **[一键安装《学习通AI自动答题》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js)**
+- 📦 **[一键安装《斗鱼直播美化》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js)**
+
+---
+
+### 3. 手动导入安装方式（网络受限备用）
+
+若因网络原因无法通过链接自动唤起安装界面，可采用离线导入：
+1. 在仓库对应目录下载 `*.user.js` 脚本文件保存到本地。
+2. 点击浏览器右上角管理器图标，进入 **管理面板** -> **实用工具**。
+3. 找到 **“从文件导入”** 区域，将下载的 `.user.js` 脚本直接拖入虚线框，点击确认导入。
 
 ---
 

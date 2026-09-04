@@ -18,42 +18,38 @@
 
 你需要准备两样东西：
 
-| 序号 | 准备什么 | 在哪里弄 |
-|:---:|---|---|
-| 1 | **Tampermonkey 浏览器插件** | 浏览器扩展商店（下面会教） |
-| 2 | **AI 的 API Key**（一串密钥） | DeepSeek 或 MiMo 官网注册（下面会教） |
+| 序号 | 准备什么 | 推荐选择 | 在哪里弄 |
+|:---:|---|---|---|
+| 1 | **脚本管理器扩展** | **篡改猴 (Tampermonkey)** 或 **脚本猫 (ScriptCat)** | 浏览器扩展商店（下面会教，**必须先装扩展才能一键安装脚本**） |
+| 2 | **AI 的 API Key**（一串密钥） | DeepSeek 或 MiMo | 对应官网免费注册获取（下面会教） |
 
 > **什么是 API Key？** 可以理解为 AI 服务的"账号密码"，脚本需要它才能调用 AI 来答题。
 
 ---
 
-## 第一步：安装 Tampermonkey 插件
+## 第一步：安装脚本管理器扩展（二选一）
 
-Tampermonkey（俗称"油猴"）是一个浏览器插件，用来运行各种辅助脚本。
+辅助脚本必须依托扩展才能在浏览器中运行。推荐以下两款扩展（任选一种安装即可）：
 
-### 用什么浏览器？
+### 方案 A（国内网络推荐）：脚本猫 (ScriptCat)
+国内开源优秀脚本管理器，下载和更新速度极快，完全无需魔法。
+- [脚本猫官网下载](https://scriptcat.org/)
+- [Edge 浏览器安装脚本猫 (Windows推荐)](https://microsoftedge.microsoft.com/addons/detail/%E8%84%9A%E6%9C%AC%E7%8C%AB/liilgpjgabokdklappibcjfablkpcekh)
+- [Chrome 商店安装脚本猫](https://chromewebstore.google.com/detail/%E8%84%9A%E6%9C%AC%E7%8C%AB/ndjpnnhakmfoccggihnmidhidhkgkien)
+- [Firefox 附加组件安装脚本猫](https://addons.mozilla.org/zh-CN/firefox/addon/scriptcat/)
 
-推荐使用以下任一浏览器（电脑端）：
+### 方案 B（全球通用经典）：篡改猴 (Tampermonkey)
+全球最流行的油猴扩展。
+- [Tampermonkey 官网](https://www.tampermonkey.net/)
+- [Edge 浏览器安装 Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
+- [Chrome 浏览器安装 Tampermonkey](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+- [Firefox 浏览器安装 Tampermonkey](https://addons.mozilla.org/firefox/addon/tampermonkey/)
 
-- **Edge**（Windows 自带，推荐）
-- **Chrome**（谷歌浏览器）
-- **Firefox**（火狐浏览器）
-
-### 安装步骤
-
-1. 点击下面对应你浏览器的链接，进入插件安装页面：
-
-   - [Edge 浏览器安装 Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
-   - [Chrome 浏览器安装 Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-   - [Firefox 浏览器安装 Tampermonkey](https://addons.mozilla.org/firefox/addon/tampermonkey/)
-
-2. 在打开的页面中，点击 **"获取"** 或 **"添加到浏览器"** 按钮
-
-3. 浏览器会弹出提示问你是否允许，点击 **"添加扩展"** 或 **"确认"**
-
-4. 安装完成后，浏览器右上角工具栏会出现 Tampermonkey 的图标（一个黑色圆脸上带两个角）
-
-> **找不到图标？** 点击浏览器右上角的拼图图标 🧩（扩展管理），在列表里找到 Tampermonkey，点击旁边的图钉 📌 把它固定到工具栏。
+### 安装步骤：
+1. 点击上面对应你浏览器的扩展商店链接。
+2. 在打开的页面中，点击 **"获取"** 或 **"添加到浏览器"** 按钮，并在弹出提示中点击 **"添加扩展"**。
+3. 安装完成后，浏览器右上角工具栏会出现对应扩展的图标。
+   > **找不到图标？** 点击浏览器右上角的拼图图标 🧩（扩展管理），找到刚刚安装的「篡改猴」或「脚本猫」，点击旁边的图钉 📌 把它固定到工具栏。
 
 ---
 
@@ -95,10 +91,12 @@ API Key 是调用 AI 答题的凭证，**二选一**即可。
 
 ### 方式一：一键自动安装（最推荐 ⚡）
 
-1. 确保你已经完成了【第一步】，且浏览器中的 Tampermonkey 插件已处于启用状态。
+> ⚠️ **重要提示**：必须确保已经完成了【第一步】在浏览器中安装了「篡改猴」或「脚本猫」！**若未安装扩展直接点击下方链接，浏览器只会显示英文源码或下载文件，无法弹出脚本安装窗口**。
+
+1. 确保浏览器中的「篡改猴」或「脚本猫」扩展已处于启用状态。
 2. 直接点击下方链接：
    👉 [一键安装/更新《学习通AI自动答题》脚本](https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js)
-3. 浏览器会自动跳转到 Tampermonkey 的脚本安装页面，点击页面上的 **“安装”**（如果已安装过，会显示“更新”）按钮即可。
+3. 扩展会自动拦截并跳转到脚本安装审查页面，点击页面上的 **“安装”**（如果已安装过，会显示“更新”）按钮即可。
 4. 安装完成后，该安装页面会自动关闭，脚本即生效。
 
 ---

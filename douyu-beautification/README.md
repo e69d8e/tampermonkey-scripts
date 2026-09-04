@@ -16,41 +16,33 @@
 
 ## 安装前的准备
 
-你只需要准备一样东西：
+你只需要在电脑浏览器中准备好 **脚本管理器扩展**（二选一即可）：
 
-| 序号 | 准备什么 | 在哪里弄 |
-|:---:|---|---|
-| 1 | **Tampermonkey 浏览器插件** | 浏览器扩展商店（下面会教） |
-
-> **什么是 Tampermonkey？** 俗称"油猴"，是一个浏览器插件，用来运行各种辅助脚本。
+| 序号 | 准备什么 | 推荐扩展 | 说明 |
+|:---:|---|---|---|
+| 1 | **脚本管理器扩展** | **篡改猴 (Tampermonkey)** 或 **脚本猫 (ScriptCat)** | 用来在浏览器中加载和运行用户脚本，**未安装此扩展无法一键安装脚本** |
 
 ---
 
-## 第一步：安装 Tampermonkey 插件
+## 第一步：安装脚本管理器扩展（篡改猴 / 脚本猫 二选一）
 
-### 用什么浏览器？
+### 推荐选择：
+- **方案 A（国内首选）：脚本猫 (ScriptCat)** —— 国内优秀开源脚本管理器，国内网络访问极快，下载安装无阻碍。
+  - [脚本猫官网下载](https://scriptcat.org/)
+  - [Edge 浏览器安装脚本猫](https://microsoftedge.microsoft.com/addons/detail/%E8%84%9A%E6%9C%AC%E7%8C%AB/liilgpjgabokdklappibcjfablkpcekh)
+  - [Chrome 商店安装脚本猫](https://chromewebstore.google.com/detail/%E8%84%9A%E6%9C%AC%E7%8C%AB/ndjpnnhakmfoccggihnmidhidhkgkien)
+  - [Firefox 附加组件安装脚本猫](https://addons.mozilla.org/zh-CN/firefox/addon/scriptcat/)
 
-推荐使用以下任一浏览器（电脑端）：
+- **方案 B（老牌首选）：篡改猴 (Tampermonkey)** —— 全球最主流的油猴插件。
+  - [Tampermonkey 官网](https://www.tampermonkey.net/)
+  - [Edge 浏览器安装 Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
+  - [Chrome 商店安装 Tampermonkey](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+  - [Firefox 附加组件安装 Tampermonkey](https://addons.mozilla.org/firefox/addon/tampermonkey/)
 
-- **Edge**（Windows 自带，推荐）
-- **Chrome**（谷歌浏览器）
-- **Firefox**（火狐浏览器）
-
-### 安装步骤
-
-1. 点击下面对应你浏览器的链接，进入插件安装页面：
-
-   - [Edge 浏览器安装 Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
-   - [Chrome 浏览器安装 Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-   - [Firefox 浏览器安装 Tampermonkey](https://addons.mozilla.org/firefox/addon/tampermonkey/)
-
-2. 在打开的页面中，点击 **"获取"** 或 **"添加到浏览器"** 按钮
-
-3. 浏览器会弹出提示问你是否允许，点击 **"添加扩展"** 或 **"确认"**
-
-4. 安装完成后，浏览器右上角工具栏会出现 Tampermonkey 的图标（一个黑色圆脸上带两个角）
-
-> **找不到图标？** 点击浏览器右上角的拼图图标 🧩（扩展管理），在列表里找到 Tampermonkey，点击旁边的图钉 📌 把它固定到工具栏。
+### 安装步骤：
+1. 点击上方对应链接，进入扩展安装页面。
+2. 点击 **"获取"** 或 **"添加到浏览器"** 按钮，并在弹出提示中点击确认。
+3. 安装完成后，浏览器右上角会出现扩展图标。若未显示，可点击拼图图标 🧩，将「篡改猴」或「脚本猫」点击图钉 📌 固定到工具栏。
 
 ---
 
@@ -58,11 +50,13 @@
 
 ### 方式一：一键直接安装（最推荐 ⚡）
 
-1. 确保你已经完成了【第一步】，且浏览器中的 Tampermonkey 插件已处于启用状态。
-2. 点击下方官方源链接：
+> ⚠️ **重要提示**：必须确认您已完成【第一步】安装了「篡改猴」或「脚本猫」！**如果没有安装扩展直接点击下方链接，浏览器只会打开一堆英文代码或直接下载文件，无法自动弹出安装界面**。
+
+1. 确保浏览器中已启用「篡改猴」或「脚本猫」。
+2. 直接点击下方官方源链接：
    👉 [一键安装/更新《斗鱼直播美化》脚本](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js)
-3. Tampermonkey 会自动识别并弹出安装确认页面，点击 **"安装"**（或“更新”）按钮即可。
-4. 安装完成后，该页面会自动关闭，脚本即生效。
+3. 扩展会自动识别并弹出安装审查页面，点击页面上的 **"安装"**（或“更新”）按钮即可。
+4. 安装完成后，该安装页面会自动关闭，刷新斗鱼直播间即可生效。
 
 ---
 
