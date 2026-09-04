@@ -21,6 +21,7 @@
 |---|:---:|---|---|:---:|:---:|
 | **[学习通AI自动答题](./automatic-AI-answer-system-for-xxt)** | `0.0.1` | `*://*.chaoxing.com/*`<br>`*://*.edu.cn/*` | • WOFF 动态字体解密<br>• 单选/多选/判断/填空/简答全题型支持<br>• 富文本 iframe / UEditor 自动回填<br>• DeepSeek & MiMo 双驱动 / 自定义端点 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js) | [使用教程](./automatic-AI-answer-system-for-xxt/README.md) |
 | **[斗鱼直播美化](./douyu-beautification)** | `0.0.1` | `*://www.douyu.com/*`<br>`*://douyu.com/*` | • `document-start` 零闪烁 CSS 注入<br>• 10 项全方位界面冗余元素净化<br>• 16:9 居中自适应大窗 / 100% 满屏<br>• 顶栏即时设置面板 & 实时热切换 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js) | [使用教程](./douyu-beautification/README.md) |
+| **[纯净阅读 (PureReader)](./pure-reader)** | `0.0.1` | `*://*.csdn.net/*`<br>`*://*.zhihu.com/*`<br>`*://juejin.cn/*`<br>`*://*.jianshu.com/*`<br>`*://*.cnblogs.com/*`<br>`*://mp.weixin.qq.com/*` | • 全平台宽屏大视野排版 (突破知乎/掘金/简书/博客园/公众号多层容器约束至 980~1200px)<br>• 自动展开全文 & CSDN 强制登录跳转熔断<br>• 净化/隐藏吸顶导航栏与大头图横幅<br>• 解除复制限制与版权小尾巴清洗<br>• 外链安全中转直达跳转<br>• 智能悬浮大纲 (TOC) & 4色沉浸阅读模式<br>• 一键清洗导出 Markdown / PDF | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/pure-reader/pure-reader.user.js) | [使用教程](./pure-reader/README.md) |
 
 
 ---
@@ -50,6 +51,15 @@ flowchart TB
                 DY_UI["导航栏原生集成设置面板"]
             end
 
+            subgraph PureReader_Module["纯净阅读增强引擎 (document-start)"]
+                PR_CSS["零闪烁净化样式 (GM_addStyle)"]
+                PR_CP["剪贴板防劫持与复制解禁器"]
+                PR_LK["外链中转直达拦截器"]
+                PR_TOC["智能悬浮大纲 (TOC) 控制器"]
+                PR_ZEN["沉浸阅读模式 & 知识导出器"]
+                PR_UI["Anthropic 悬浮 Dock & 设置面板"]
+            end
+
             GM_Storage[("持久化存储引擎 (GM_getValue / GM_setValue)")]
             GM_Network["跨域网络沙箱 (GM_xmlhttpRequest)"]
             GM_Menu["原生油猴交互菜单 (GM_registerMenuCommand)"]
@@ -58,6 +68,7 @@ flowchart TB
         subgraph TargetPages["宿主目标 Web 应用"]
             Page_XXT["学习通作业 / 考试页面 (Iframe / UEditor)"]
             Page_Douyu["斗鱼直播间 (HTML5 Player / WebSocket 弹幕)"]
+            Page_Reader["CSDN / 知乎 / 掘金 / 简书 / 博客园 / 公众号"]
         end
 
         subgraph ExternalAPIs["外部大模型 API 服务"]
@@ -80,6 +91,13 @@ flowchart TB
     DY_MO -->|动态节点拦截| Page_Douyu
     DY_Player -->|控制条触发| Page_Douyu
     DY_UI <--> GM_Storage
+
+    PR_CSS -->|首屏防闪烁与去广告| Page_Reader
+    PR_CP -->|剪贴板净化 & 复制解禁| Page_Reader
+    PR_LK -->|外链中转直跳| Page_Reader
+    PR_TOC -->|智能目录大纲挂载| Page_Reader
+    PR_ZEN -->|沉浸模式排版重塑| Page_Reader
+    PR_UI <--> GM_Storage
 ```
 
 ---
@@ -224,6 +242,27 @@ interface DouyuBeautifyConfig {
 }
 ```
 
+### 3. 纯净阅读增强配置模型 (`pureReaderConfig`)
+
+```typescript
+interface PureReaderConfig {
+    unblockCopy: boolean;       // 解除复制限制与版权小尾巴清洗
+    bypassRedirect: boolean;    // 外链直接跳转（绕过中转页）
+    removeAds: boolean;         // 拦截广告、营销横幅与浮动挂件
+    autoExpandContent: boolean; // 自动展开全文/阅读全文
+    blockLoginModal: boolean;   // 拦截未登录阻断弹窗与强制锁屏
+    enableFloatingTOC: boolean; // 启用智能悬浮大纲目录
+    enableZenMode: boolean;     // 启用沉浸式极简阅读器
+    enableCodeCopy: boolean;    // 代码块免登录一键复制增强
+    hideTopNav: boolean;        // 净化/隐藏各平台顶部导航栏与大横幅
+    wideArticleLayout: boolean; // 宽屏大视野排版：正文及版芯自适应加宽至 980~1200px
+    zenTheme: 'cream' | 'green' | 'dark' | 'white'; // 沉浸阅读主题调色板
+    zenFontSize: number;        // 阅读字号大小 (px)
+    zenMaxWidth: number;        // 阅读版芯最大宽度 (px)
+    showFloatingDock: boolean;  // 显示右下角悬浮工具坞
+}
+```
+
 ---
 
 ## 工程目录结构
@@ -237,10 +276,14 @@ tampermonkey-scripts/
 │   ├── 学习通AI答题.user.js                          # 脚本单文件源码（IIFE）
 │   ├── DESIGN.md                                   # Anthropic UI 规范与 Design Tokens
 │   └── README.md                                   # 用户操作手册与故障排除指南
-└── douyu-beautification/                           # 【项目二】斗鱼直播间极致美化
-    ├── douyu-beautification.user.js                # 脚本单文件源码（IIFE）
-    ├── CLAUDE.md                                   # 模块专用架构规约
-    └── README.md                                   # 选项功能清单与更新记录
+├── douyu-beautification/                           # 【项目二】斗鱼直播间极致美化
+│   ├── douyu-beautification.user.js                # 脚本单文件源码（IIFE）
+│   ├── CLAUDE.md                                   # 模块专用架构规约
+│   └── README.md                                   # 选项功能清单与更新记录
+└── pure-reader/                                    # 【项目三】多平台纯净阅读与排版增强
+    ├── pure-reader.user.js                         # 脚本单文件源码（IIFE）
+    ├── CLAUDE.md                                   # 平台适配与开发规范
+    └── README.md                                   # 完整使用教程与快捷键手册
 ```
 
 ---
@@ -266,6 +309,7 @@ tampermonkey-scripts/
 
 - 📦 **[一键安装《学习通AI自动答题》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js)**
 - 📦 **[一键安装《斗鱼直播美化》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js)**
+- 📦 **[一键安装《纯净阅读 (PureReader)》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/pure-reader/pure-reader.user.js)**
 
 ---
 

@@ -10,6 +10,7 @@ This is a monorepo containing independent Tampermonkey userscripts. Each project
 |---|---|---|
 | `automatic-AI-answer-system-for-xxt/` | `学习通AI答题.user.js` | Automates quiz answering on Chaoxing (学习通) learning platform via DeepSeek/MiMo AI APIs |
 | `douyu-beautification/` | `douyu-beautification.user.js` | Removes clutter and applies dark theme on Douyu (斗鱼) live streaming pages |
+| `pure-reader/` | `pure-reader.user.js` | Distraction-free reading, ad-blocking, unblock copy, TOC, and Zen mode across CSDN, Zhihu, Juejin, JianShu, Cnblogs, WeChat Articles |
 
 Each project has its own `CLAUDE.md` with detailed architecture documentation — read those before making changes.
 
