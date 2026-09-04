@@ -97,7 +97,7 @@ API Key 是调用 AI 答题的凭证，**二选一**即可。
 
 1. 确保你已经完成了【第一步】，且浏览器中的 Tampermonkey 插件已处于启用状态。
 2. 直接点击下方链接：
-   👉 [一键安装/更新《学习通AI自动答题》脚本](https://github.com/e69d8e/automatic-AI-answer-system-for-xxt/raw/main/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js)
+   👉 [一键安装/更新《学习通AI自动答题》脚本](https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js)
 3. 浏览器会自动跳转到 Tampermonkey 的脚本安装页面，点击页面上的 **“安装”**（如果已安装过，会显示“更新”）按钮即可。
 4. 安装完成后，该安装页面会自动关闭，脚本即生效。
 
