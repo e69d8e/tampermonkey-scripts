@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         学习通AI自动答题
 // @namespace    http://tampermonkey.net/
-// @version      1.2.0
+// @version      0.0.1
 // @description  调用DeepSeek/MiMo AI自动完成学习通作业和考试题目
 // @author       e69d8e
 // @match        *://*.chaoxing.com/*
@@ -515,7 +515,16 @@
     // ==================== 工具函数 ====================
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     const getApiKey = () => CONFIG.provider === 'deepseek' ? CONFIG.deepseekKey : CONFIG.mimoKey;
-    const getEndpoint = () => CONFIG.customEndpoint || ENDPOINTS[CONFIG.provider] || ENDPOINTS.deepseek;
+    const getEndpoint = () => {
+        let ep = (CONFIG.customEndpoint || '').trim();
+        if (ep) {
+            if (!ep.endsWith('/chat/completions')) {
+                ep = ep.replace(/\/+$/, '') + '/chat/completions';
+            }
+            return ep;
+        }
+        return ENDPOINTS[CONFIG.provider] || ENDPOINTS.deepseek;
+    };
     const getModel = () => CONFIG.provider === 'deepseek' ? CONFIG.deepseekModel : CONFIG.mimoModel;
 
     // ==================== 字体解密 ====================
@@ -618,6 +627,9 @@
 
             let questionElements = doc.querySelectorAll('.questionLi');
             if (questionElements.length === 0) {
+                questionElements = doc.querySelectorAll('.TiMu, .tiMu');
+            }
+            if (questionElements.length === 0) {
                 questionElements = doc.querySelectorAll('[typename]');
             }
             if (questionElements.length === 0) {
@@ -656,8 +668,18 @@
 
             if (answerType === -1) {
                 const sectionTitle = el.closest('.TiMu')?.querySelector('h2.type_tit')?.textContent || '';
-                const idx = matchType(sectionTitle + ' ' + el.textContent);
+                const idx = matchType(sectionTitle);
                 if (idx !== -1) answerType = idx;
+            }
+
+            if (answerType === -1) {
+                // 仅从标题的前置标识（如【单选题】或 (多选) ）中提取题型，避免题干正文包含“计算/判断”引起误判
+                const titleRaw = el.querySelector('h3.mark_name, .mark_name, h3, .questionTitle, [class*="title"]')?.textContent || '';
+                const tagMatch = titleRaw.match(/[【(（\[]\s*([^\s】)）\]]+)\s*[】)）\]]/);
+                if (tagMatch) {
+                    const tagIdx = matchType(tagMatch[1]);
+                    if (tagIdx !== -1) answerType = tagIdx;
+                }
             }
 
             if (answerType === -1) {
@@ -709,8 +731,8 @@
                     .replace(/^\[[^\]]+\]\s*/, '')
                     .replace(/^（[^）]+）\s*/, '')
                     .replace(/^\([^)]+\)\s*/, '')
-                    .replace(/\s*\(.*?\)\s*$/, '')
-                    .replace(/\s*（.*?）\s*$/, '');
+                    // 仅移除末尾的分值标注，例如（5.0分）、(10分)、【2分】，保留题干本身的括号与数学区间
+                    .replace(/\s*[（(【]\s*\d+(?:\.\d+)?\s*分\s*[）)】]\s*$/i, '');
                 titleText = FontDecryptor.decrypt(titleText);
             }
             if (!titleText && titleEl) {
@@ -726,10 +748,18 @@
                 const labelEl = opt.querySelector('.num_option, [class*="label"], [class*="num"]');
                 const textEl = opt.querySelector('.answer_p, [class*="answer"], [class*="content"], p');
                 let label = labelEl ? labelEl.textContent.trim() : String.fromCharCode(65 + i);
+                label = label.replace(/[^A-Za-z0-9对错√×]/g, '') || String.fromCharCode(65 + i);
                 let text = textEl ? textEl.textContent.trim() : opt.textContent.trim();
+                // 如果文字为空但包含图片，尝试提取图片信息
+                if (!text) {
+                    const img = opt.querySelector('img');
+                    if (img) {
+                        text = img.getAttribute('alt') || img.getAttribute('title') || `[图片: ${img.getAttribute('src') || ''}]`;
+                    }
+                }
                 text = FontDecryptor.decrypt(text);
-                const labelPattern = new RegExp(`^[${label}][.、．\\s]+`, 'i');
-                text = text.replace(labelPattern, '');
+                const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                text = text.replace(new RegExp(`^${escapedLabel}[.、．\\s]+`, 'i'), '');
                 options.push({ label, text, element: opt });
             });
 
@@ -801,14 +831,29 @@
 
         getSaveButton() {
             const doc = this._findQuestionDoc() || document;
-            return doc.querySelector('a[onclick*="saveWork"]') ||
+            return doc.querySelector('a[onclick*="saveWork"], a[onclick*="save"], .btnSave, #saveBtn') ||
                    (doc.querySelector('a:last-child')?.textContent?.includes('保存') ? doc.querySelector('a:last-child') : null);
         },
 
         getSubmitButton() {
             const doc = this._findQuestionDoc() || document;
-            return doc.querySelector('a[onclick*="submitValidate"]') ||
-                   (doc.querySelector('a:last-child')?.textContent?.includes('提交') ? doc.querySelector('a:last-child') : null);
+            // 考试页面提交按钮
+            const examBtn = doc.querySelector('a[onclick*="submitValidate"], a[onclick*="submitHomework"], a[onclick*="btnSubmit"]');
+            if (examBtn) return examBtn;
+
+            // 作业页面提交按钮 (超星常用 form1submit 或 btnOk_tar)
+            const workBtn = doc.querySelector('a[onclick*="form1submit"], a.btnOk_tar, .btnOk_tar, #submitBtn, a.btnSubmit, input[type="submit"][value*="提交"]');
+            if (workBtn) return workBtn;
+
+            // 根据文本内容匹配“提交”按钮
+            const allCandidates = doc.querySelectorAll('a, button, input[type="button"], input[type="submit"]');
+            for (const el of allCandidates) {
+                const text = (el.tagName === 'INPUT' ? el.value : el.textContent || '').trim();
+                if (/^(提交|提交作业|提交试卷|交卷)$/.test(text)) {
+                    return el;
+                }
+            }
+            return null;
         }
     };
 
@@ -859,6 +904,25 @@
             const model = getModel();
 
             return new Promise((resolve, reject) => {
+                const reqData = {
+                    model: model,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: '你是一个精准的答题助手，只返回答案，不返回任何解释、标点或多余文字。选择题只返回选项字母，判断题只返回"对"或"错"，填空题用|||分隔多个答案。'
+                        },
+                        {
+                            role: 'user',
+                            content: prompt,
+                        }
+                    ],
+                    max_tokens: 2048,
+                    stream: false,
+                };
+                if (!model.toLowerCase().includes('reasoner')) {
+                    reqData.temperature = 0.1;
+                }
+
                 const xhr = GM_xmlhttpRequest({
                     method: 'POST',
                     url: endpoint,
@@ -866,22 +930,7 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${apiKey}`,
                     },
-                    data: JSON.stringify({
-                        model: model,
-                        messages: [
-                            {
-                                role: 'system',
-                                content: '你是一个精准的答题助手，只返回答案，不返回任何解释、标点或多余文字。选择题只返回选项字母，判断题只返回"对"或"错"，填空题用|||分隔多个答案。'
-                            },
-                            {
-                                role: 'user',
-                                content: prompt,
-                            }
-                        ],
-                        temperature: 0.1,
-                        max_tokens: 2048,
-                        stream: false,
-                    }),
+                    data: JSON.stringify(reqData),
                     onload: function(response) {
                         try {
                             if (response.status !== 200) {
@@ -941,22 +990,31 @@
 
         _parseChoiceAnswer(answer, question, isMulti) {
             let letters = [];
+            const validLabels = question.options.map(o => o.label.toUpperCase());
+
+            // 优先匹配模式如 "答案：A"、"选择 ACD"、"正确选项是 B"
+            const prefixMatch = answer.match(/(?:正确答案|答案|选择|选)\s*[是为：:\s]*([A-Za-z,\s、和与及]+)/i);
+            const textToSearch = prefixMatch ? prefixMatch[1] : answer;
+
             if (isMulti) {
-                const match = answer.match(/[A-Za-z]/g);
-                if (match) {
-                    letters = [...new Set(match.map(l => l.toUpperCase()))].sort();
+                const matches = textToSearch.match(/[A-Za-z]/g);
+                if (matches) {
+                    letters = [...new Set(matches.map(l => l.toUpperCase()))]
+                        .filter(l => validLabels.length === 0 || validLabels.includes(l))
+                        .sort();
                 }
             } else {
-                const match = answer.match(/[A-Za-z]/);
-                if (match) {
-                    letters = [match[0].toUpperCase()];
+                const matches = textToSearch.match(/[A-Za-z]/g);
+                if (matches) {
+                    const found = matches.map(l => l.toUpperCase()).find(l => validLabels.length === 0 || validLabels.includes(l));
+                    if (found) letters = [found];
                 }
             }
 
             if (letters.length === 0) {
                 for (const opt of question.options) {
-                    if (answer.includes(opt.text) || opt.text.includes(answer)) {
-                        letters.push(opt.label.replace(/[^A-Z]/g, ''));
+                    if (opt.text && (answer.includes(opt.text) || opt.text.includes(answer))) {
+                        letters.push(opt.label.toUpperCase());
                     }
                 }
             }
@@ -964,11 +1022,20 @@
         },
 
         _parseJudgeAnswer(answer) {
-            const trueWords = ['正确', '是', '对', '√', 't', 'true', '对的', '正确答案'];
-            const falseWords = ['错误', '否', '错', '×', 'f', 'false', '错的', '错误答案'];
-            const lower = answer.toLowerCase();
-            const isTrue = trueWords.some(w => lower.includes(w));
+            const trimmed = answer.trim();
+            // 优先检测是否直接回答了选项字母 A 或 B
+            const letterMatch = trimmed.match(/^[选项]*\s*([AB])\b/i) || trimmed.match(/^(?:正确答案|答案|选择|选)\s*[是为：:\s]*([AB])\b/i);
+            if (letterMatch) {
+                return { type: 'judge', letter: letterMatch[1].toUpperCase() };
+            }
+
+            const trueWords = ['正确', '是', '对', '√', 'true', '对的', '正确答案'];
+            const falseWords = ['错误', '否', '错', '×', 'false', '错的', '错误答案', '不正确', '不成立', '不对'];
+            const lower = trimmed.toLowerCase();
+
             const isFalse = falseWords.some(w => lower.includes(w));
+            const isTrue = !isFalse && trueWords.some(w => lower.includes(w));
+
             return { type: 'judge', value: isFalse ? false : true };
         },
 
@@ -977,6 +1044,13 @@
             if (question.blanks.length > 1 && parts.length === 1) {
                 parts = answer.split(/[;；\n]/).map(s => s.trim()).filter(Boolean);
             }
+            // 清理每个空前面的编号前缀，例如 "1. ", "空1：", "(1)", "①" 等
+            parts = parts.map(p => {
+                return p.replace(/^[\(（]?\d+[\)）]?[.、．\s:：]*/, '')
+                        .replace(/^(?:第?\d+空|空\d+)[:：\s]*/, '')
+                        .replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*/, '')
+                        .trim();
+            }).filter(Boolean);
             return { type: 'blank', parts };
         },
 
@@ -1004,26 +1078,76 @@
         },
 
         async _fillChoice(question, parsedAnswer) {
-            const { type, letters, value } = parsedAnswer;
+            const { type, letters, value, letter } = parsedAnswer;
             if (type === 'judge') {
-                const targetIndex = value ? 0 : 1;
-                if (question.options[targetIndex]) {
-                    this._clickOption(question.options[targetIndex].element);
+                let targetOpt = null;
+                // 如果 AI 返回了字母 A/B
+                if (letter) {
+                    targetOpt = question.options.find(o => o.label.toUpperCase().startsWith(letter));
                 }
+                // 如果未通过字母找到，尝试通过选项文本语义（对/错）匹配
+                if (!targetOpt && question.options.length >= 2) {
+                    const trueWords = ['对', '正确', '√', 'true', 't'];
+                    const falseWords = ['错', '错误', '×', 'false', 'f'];
+                    const targetWords = value ? trueWords : falseWords;
+                    targetOpt = question.options.find(o => {
+                        const text = (o.text || o.label || '').toLowerCase();
+                        return targetWords.some(w => text.includes(w));
+                    });
+                }
+                // 兜底：按传统索引 0 为对，1 为错
+                if (!targetOpt) {
+                    const targetIndex = value ? 0 : 1;
+                    targetOpt = question.options[targetIndex];
+                }
+                if (targetOpt) {
+                    this._clickOption(targetOpt.element);
+                    this._syncToHiddenAnswer(question, targetOpt.label || (value ? 'true' : 'false'));
+                }
+            } else if (type === 'multi') {
+                // 多选题：比对当前选中状态，防止反选！
+                for (const opt of question.options) {
+                    const optLetter = opt.label.toUpperCase();
+                    const shouldBeSelected = letters.includes(optLetter);
+                    const isCurrentlySelected = this._isOptionSelected(opt.element);
+                    if (shouldBeSelected !== isCurrentlySelected) {
+                        this._clickOption(opt.element);
+                        await sleep(300);
+                    }
+                }
+                this._syncToHiddenAnswer(question, letters.join(''));
             } else {
-                for (const letter of letters) {
-                    const opt = question.options.find(o => o.label.toUpperCase().startsWith(letter.toUpperCase()));
+                // 单选题
+                for (const l of letters) {
+                    const opt = question.options.find(o => o.label.toUpperCase().startsWith(l.toUpperCase()));
                     if (opt) {
                         this._clickOption(opt.element);
+                        this._syncToHiddenAnswer(question, opt.label || l);
                         await sleep(300);
                     }
                 }
             }
         },
 
+        _isOptionSelected(element) {
+            if (!element) return false;
+            const input = element.querySelector('input[type="checkbox"], input[type="radio"]');
+            if (input) return input.checked;
+            if (/\b(check_answer|answerBg_on|active|on)\b/.test(element.className || '')) return true;
+            const subCheck = element.querySelector('.check, .checked, .icon-check, [class*="check_icon"], [class*="selected"], input:checked');
+            if (subCheck) return true;
+            return ['aria-checked', 'aria-selected', 'data-checked', 'data-selected'].some(attr => element.getAttribute(attr) === 'true');
+        },
+
         _clickOption(element) {
+            if (!element) return;
             try {
-                element.click();
+                const clickable = element.querySelector('a, input[type="radio"], input[type="checkbox"], label') || element;
+                clickable.click();
+                if (clickable.tagName === 'INPUT') {
+                    clickable.checked = true;
+                    clickable.dispatchEvent(new Event('change', { bubbles: true }));
+                }
             } catch (e) {
                 try {
                     element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -1474,15 +1598,16 @@
 
                 const startInput = document.getElementById('ai-start-from');
                 const userModified = startInput?.dataset.userModified === 'true';
-                let firstUnanswered = 1;
+                let firstUnanswered = null;
                 let alreadyAnswered = 0;
                 for (let i = 0; i < questions.length; i++) {
                     if (this._isAnswered(questions[i])) {
                         alreadyAnswered++;
-                    } else if (firstUnanswered === 1) {
+                    } else if (firstUnanswered === null) {
                         firstUnanswered = i + 1;
                     }
                 }
+                if (firstUnanswered === null) firstUnanswered = 1;
                 if (alreadyAnswered === questions.length) firstUnanswered = 1;
                 if (startInput && !userModified) startInput.value = firstUnanswered;
 
@@ -1563,6 +1688,8 @@
                 this._running = false;
                 this._abort = false;
                 this._currentXHR = null;
+                const startInput = document.getElementById('ai-start-from');
+                if (startInput) delete startInput.dataset.userModified;
                 this._updateUI();
             }
         },
@@ -1578,7 +1705,7 @@
                     return true;
                 }
                 
-                const selEl = el.querySelector('.check_answer, .answerBg_on, .on, .active, [class*="check_answer"], [class*="answerBg_on"]');
+                const selEl = el.querySelector('.check_answer, .answerBg_on, [class*="check_answer"], [class*="answerBg_on"]');
                 if (selEl) {
                     Logger.info(`[检测] 题 ${question.index + 1} 已答: 匹配到选中态类名 (${selEl.className})`);
                     return true;
@@ -1586,17 +1713,8 @@
 
                 const options = el.querySelectorAll('.answerBg, .answer_li, li, [class*="option"]');
                 for (const opt of options) {
-                    if (/\b(check_answer|answerBg_on|active|on)\b/.test(opt.className || '')) {
-                        Logger.info(`[检测] 题 ${question.index + 1} 已答: 选项匹配到类名 (${opt.className})`);
-                        return true;
-                    }
-                    const subCheck = opt.querySelector('.check, .checked, .icon-check, [class*="check_icon"], [class*="selected"], input:checked');
-                    if (subCheck) {
-                        Logger.info(`[检测] 题 ${question.index + 1} 已答: 选项子元素匹配到标记 (.${subCheck.className})`);
-                        return true;
-                    }
-                    if (['aria-checked', 'aria-selected', 'data-checked', 'data-selected'].some(attr => opt.getAttribute(attr) === 'true')) {
-                        Logger.info(`[检测] 题 ${question.index + 1} 已答: 属性匹配`);
+                    if (AnswerFiller._isOptionSelected(opt)) {
+                        Logger.info(`[检测] 题 ${question.index + 1} 已答: 选项匹配到选中状态`);
                         return true;
                     }
                 }
@@ -1615,7 +1733,7 @@
 
             if (type >= 3) {
                 if (question.blanks?.length > 0) {
-                    return question.blanks.some(b => {
+                    return question.blanks.every(b => {
                         const target = b.element;
                         if (!target) return false;
                         let text = '';
@@ -1831,6 +1949,15 @@
                     }
                     this._el.classList.remove('collapsed');
                     document.body.classList.remove('ai-dragging');
+
+                    // 展开时检查右边界，防止溢出屏幕外
+                    const rect = this._el.getBoundingClientRect();
+                    const viewportWidth = window.innerWidth;
+                    if (rect.left + 320 > viewportWidth) {
+                        const clamped = Math.max(10, viewportWidth - 340);
+                        this._el.style.left = clamped + 'px';
+                        this._el.style.right = 'auto';
+                    }
                 }
             });
 
@@ -1902,6 +2029,16 @@
             });
 
             document.getElementById('ai-parse-btn').addEventListener('click', () => {
+                // 自动切换到日志 Tab
+                this._el.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+                this._el.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                const logBtn = this._el.querySelector('.tab-bar button[data-tab="log"]');
+                const logTab = this._el.querySelector('.tab-content[data-tab="log"]');
+                if (logBtn && logTab) {
+                    logBtn.classList.add('active');
+                    logTab.classList.add('active');
+                }
+
                 Logger.info('正在解析题目...');
                 const questions = DomParser.getQuestions();
                 if (questions.length === 0) {
@@ -1912,7 +2049,7 @@
                         Logger.info(`${i + 1}. [${q.typeName}] ${q.title.substring(0, 50)}...`);
                     });
                 }
-                showToast('📋 请前往日志标签页查看结果');
+                showToast('📋 题目列表已在日志中展示');
             });
 
             document.getElementById('ai-provider').addEventListener('change', (e) => {
@@ -2014,19 +2151,6 @@
             return;
         }
 
-        // 避免在同源 iframe 中重复加载和执行脚本（UI 创建、菜单命令等由父窗口脚本统一托管）
-        if (window.self !== window.top) {
-            let sameOriginParent = false;
-            try {
-                sameOriginParent = !!window.parent.location.href;
-            } catch (e) {
-                sameOriginParent = false;
-            }
-            if (sameOriginParent) {
-                return;
-            }
-        }
-
         let panelCreated = false;
         const tryCreatePanel = () => {
             if (panelCreated) return true;
@@ -2046,14 +2170,28 @@
 
         // 立即尝试检测创建
         if (!tryCreatePanel()) {
-            // 前 10 秒内，每秒轮询检测一次，以便在题目异步加载完毕后自动显示面板
+            // 轮询检测，最多持续 30 秒（防止网络较慢时题目 iframe 加载超时）
             let checkCount = 0;
             const timer = setInterval(() => {
                 checkCount++;
-                if (tryCreatePanel() || checkCount >= 10) {
+                if (tryCreatePanel() || checkCount >= 30) {
                     clearInterval(timer);
                 }
             }, 1000);
+
+            // 使用 MutationObserver 监听异步 iframe 与 DOM 变化
+            try {
+                const observer = new MutationObserver(() => {
+                    if (tryCreatePanel()) {
+                        observer.disconnect();
+                        clearInterval(timer);
+                    }
+                });
+                observer.observe(document.body || document.documentElement, {
+                    childList: true,
+                    subtree: true
+                });
+            } catch (e) {}
         }
     }
 
