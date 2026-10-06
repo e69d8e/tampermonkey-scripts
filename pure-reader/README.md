@@ -187,3 +187,24 @@ sequenceDiagram
 | <kbd>Alt</kbd> + <kbd>R</kbd> | 开启 / 退出沉浸式阅读模式 (Zen Mode) |
 | <kbd>Alt</kbd> + <kbd>T</kbd> | 展开 / 收起文章悬浮大纲目录 (Floating TOC) |
 | <kbd>Esc</kbd> | 退出沉浸式阅读视图 |
+
+---
+
+## 更新记录
+
+### v0.0.2
+
+**兼容性修复**
+- 各平台结构类节点（导航栏、侧栏）改为仅 CSS 隐藏、不再物理移除：修复博客园官方脚本 `NavbarSearchManager` 因搜索节点缺失抛出 `TypeError` 的问题；同时规避知乎 (React) / 掘金 (Vue) 中移除框架受管节点可能引发的渲染异常。
+
+**功能修复**
+- 快捷键改用 `e.code` 判定按键：修复 macOS 上按住 <kbd>Option</kbd> 时 `e.key` 变为 `®` 等特殊字符导致 <kbd>Alt</kbd>+<kbd>R</kbd> / <kbd>Alt</kbd>+<kbd>T</kbd> 失灵的问题。
+- 沉浸阅读模式下 <kbd>Alt</kbd>+<kbd>T</kbd> 不再触发被遮罩遮挡的目录面板；进入沉浸模式时自动收起目录。
+- 修复 TOC 滚动高亮在标题位于定位祖先内时计算错位的问题（改用视口相对坐标）。
+- 修复导出 Markdown 时标题清洗正则过于激进、误伤含连字符/下划线标题的问题，现仅剥离已知的平台来源后缀。
+- Markdown 导出新增有序列表编号与嵌套列表缩进支持，并规范化正文空白。
+
+**性能优化**
+- 各平台 `MutationObserver` 清理回调统一增加 200ms 防抖，高频 DOM 变更合并执行。
+- CSDN 兜底轮询在页面不可见（`document.hidden`）时自动跳过，降低后台标签页 CPU 占用。
+- 简书"展开全文"按钮增加已点击标记，避免观察器触发期间重复点击。

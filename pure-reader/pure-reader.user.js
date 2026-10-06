@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         纯净阅读 (PureReader) - 沉浸阅读与通用排版增强
 // @namespace    https://github.com/e69d8e/tampermonkey-scripts
-// @version      0.0.1
+// @version      0.0.2
 // @description  专为 CSDN、知乎、掘金、简书、博客园、微信公众号打造的纯净阅读器：免登录浏览、解除复制限制、拦截广告弹窗、外链直达、悬浮大纲目录 (TOC)、沉浸式极简阅读模式、一键导出 Markdown / PDF。
 // @author       YH
 // @match        *://*.csdn.net/*
@@ -787,6 +787,16 @@
     // ==========================================
     //  7. 平台专有 DOM 处理逻辑
     // ==========================================
+    // 高频 DOM 变更合并执行:平台清理函数包含大量 querySelectorAll,
+    // 直接挂在 MutationObserver 上会在动态页面造成明显卡顿
+    function debounce(fn, wait) {
+        let timer = null;
+        return function () {
+            clearTimeout(timer);
+            timer = setTimeout(fn, wait);
+        };
+    }
+
     function setupPlatformFixes() {
         // --- CSDN 修复 ---
         if (isCSDN) {
@@ -882,11 +892,15 @@
 
             document.addEventListener('DOMContentLoaded', cleanCSDN);
             window.addEventListener('load', cleanCSDN);
-            setInterval(cleanCSDN, 1500);
+            // 兜底轮询:页面不可见时跳过,降低后台标签页的 CPU 占用
+            setInterval(() => {
+                if (!document.hidden) cleanCSDN();
+            }, 1500);
 
-            // 监听 DOM 变化以实现毫秒级快速清理
+            // 监听 DOM 变化实现快速清理,变更高频时合并执行
             try {
-                const csdnObserver = new MutationObserver(cleanCSDN);
+                const debouncedCleanCSDN = debounce(cleanCSDN, 200);
+                const csdnObserver = new MutationObserver(debouncedCleanCSDN);
                 csdnObserver.observe(document.documentElement, { childList: true, subtree: true });
             } catch (e) { /* ignore */ }
 
@@ -910,20 +924,19 @@
             function cleanZhihu() {
                 // 拦截并摧毁登录弹窗与锁屏
                 if (config.blockLoginModal) {
+                    // 仅隐藏而非移除:知乎为 React 应用,外部移除其受管节点可能引发渲染异常
                     const modals = document.querySelectorAll('.Modal-wrapper, .sign-flow-modal, .SignFlowModal');
-                    modals.forEach(m => m.remove());
+                    modals.forEach(m => { m.style.display = 'none'; });
                     document.documentElement.classList.remove('Modal-open');
                     document.body.classList.remove('Modal-open');
                     document.documentElement.style.overflow = 'auto';
                     document.body.style.overflow = 'auto';
                 }
 
-                // 移除侧栏以腾出宽屏排版空间
+                // 隐藏侧栏以腾出宽屏排版空间 (同上,不物理移除受管节点)
                 if (config.zhihu_hideSideBar || config.wideArticleLayout) {
-                    const side = document.querySelector('.Question-sideColumn, .GlobalWrite-nav');
-                    if (side) side.remove();
-                    const rightBar = document.querySelector('.QuestionPage-sideColumn');
-                    if (rightBar) rightBar.remove();
+                    document.querySelectorAll('.Question-sideColumn, .GlobalWrite-nav, .QuestionPage-sideColumn')
+                        .forEach(el => { el.style.display = 'none'; });
                 }
 
                 // 自动展开折叠回答
@@ -940,9 +953,10 @@
 
             document.addEventListener('DOMContentLoaded', cleanZhihu);
             window.addEventListener('load', cleanZhihu);
-            // 滚动时知乎可能会异步挂载弹窗，使用 MutationObserver
+            // 滚动时知乎可能会异步挂载弹窗，使用 MutationObserver（高频变更合并执行）
             try {
-                const observer = new MutationObserver(cleanZhihu);
+                const debouncedCleanZhihu = debounce(cleanZhihu, 200);
+                const observer = new MutationObserver(debouncedCleanZhihu);
                 observer.observe(document.documentElement, { childList: true, subtree: true });
             } catch (e) { /* ignore */ }
         }
@@ -950,9 +964,10 @@
         // --- 掘金 修复 ---
         if (isJuejin) {
             function cleanJuejin() {
+                // 掘金为 Vue 应用,受管节点仅隐藏不移除,避免外部删除引发渲染异常
                 if (config.hideTopNav) {
                     const h = document.querySelector('header.main-header, .main-header-box, .header-container, header.juejin-header');
-                    if (h) h.remove();
+                    if (h) h.style.display = 'none';
                     const viewContainer = document.querySelector('.view-container');
                     if (viewContainer) {
                         viewContainer.style.paddingTop = '0px';
@@ -961,15 +976,16 @@
                 }
                 if (config.removeAds || config.juejin_pureLayout || config.wideArticleLayout) {
                     const suspension = document.querySelector('.suspension-panel');
-                    if (suspension) suspension.remove();
+                    if (suspension) suspension.style.display = 'none';
                     const sb = document.querySelector('.sidebar');
-                    if (sb) sb.remove();
+                    if (sb) sb.style.display = 'none';
                 }
             }
             document.addEventListener('DOMContentLoaded', cleanJuejin);
             window.addEventListener('load', cleanJuejin);
             try {
-                const juejinObserver = new MutationObserver(cleanJuejin);
+                const debouncedCleanJuejin = debounce(cleanJuejin, 200);
+                const juejinObserver = new MutationObserver(debouncedCleanJuejin);
                 juejinObserver.observe(document.documentElement, { childList: true, subtree: true });
             } catch (e) { /* ignore */ }
         }
@@ -977,18 +993,23 @@
         // --- 简书 修复 ---
         if (isJianshu) {
             function cleanJianshu() {
+                // 简书为 React 应用,受管节点仅隐藏不移除
                 if (config.hideTopNav) {
                     const nav = document.querySelector('header, nav.navbar, nav._213wzc, nav.navbar-fixed-top');
-                    if (nav) nav.remove();
+                    if (nav) nav.style.display = 'none';
                     if (document.body) document.body.style.paddingTop = '0px';
                 }
                 if (config.removeAds || config.jianshu_removeAppPrompt || config.wideArticleLayout) {
-                    const aside = document.querySelector('aside');
-                    if (aside) aside.remove();
+                    document.querySelectorAll('aside').forEach(el => { el.style.display = 'none'; });
                 }
                 if (config.autoExpandContent) {
-                    const btn = document.querySelector('.collapse-free-content .read-more, .collapse-free-content button');
-                    if (btn) btn.click();
+                    document.querySelectorAll('.collapse-free-content .read-more, .collapse-free-content button').forEach(btn => {
+                        // 标记已点击,避免 MutationObserver 触发期间反复点击
+                        if (!btn.dataset.pureClicked) {
+                            btn.dataset.pureClicked = 'true';
+                            btn.click();
+                        }
+                    });
                 }
             }
             if (document.readyState === 'loading') {
@@ -998,7 +1019,8 @@
             }
             window.addEventListener('load', cleanJianshu);
             try {
-                const jianshuObserver = new MutationObserver(cleanJianshu);
+                const debouncedCleanJianshu = debounce(cleanJianshu, 200);
+                const jianshuObserver = new MutationObserver(debouncedCleanJianshu);
                 jianshuObserver.observe(document.documentElement, { childList: true, subtree: true });
             } catch (e) { /* ignore */ }
         }
@@ -1006,15 +1028,13 @@
         // --- 博客园 修复 ---
         if (isCnblogs) {
             function cleanCnblogs() {
-                if (config.hideTopNav) {
-                    const topNav = document.querySelector('#top_nav');
-                    if (topNav) topNav.remove();
-                    const header = document.querySelector('#header, #blogHeader');
-                    if (header) header.remove();
-                }
+                // #top_nav/#header/#sideBar 等结构节点仅由 CSS 隐藏、不做物理移除:
+                // 实测移除后博客园官方脚本 NavbarSearchManager 会因节点缺失抛 TypeError
                 if (config.cnblogs_removeAds || config.wideArticleLayout) {
-                    const sb = document.querySelector('#sideBar, #left-side');
-                    if (sb) sb.remove();
+                    document.querySelectorAll(`
+                        #cnblogs_c1, #cnblogs_c2, #cnblogs_b1, #cnblogs_b2,
+                        #ad_t2, #under_post_news, #under_post_kb, #side_banner, #opt_under_post
+                    `).forEach(el => el.remove());
                 }
             }
             document.addEventListener('DOMContentLoaded', cleanCnblogs);
@@ -1106,8 +1126,9 @@
                         document.querySelector('.post-content');
         }
 
-        title = title.replace(/[-_][\s\S]*$/, '').trim();
-        return { title, contentEl };
+        // 仅剥离已知的平台来源后缀,避免误伤标题中原本就含连字符/下划线的内容
+        const cleaned = title.replace(/\s*[-–—_]\s*(CSDN博客|CSDN|博客园|稀土掘金|掘金|简书|知乎|微信公众号平台|微信开放社区)\s*$/i, '').trim();
+        return { title: cleaned || title, contentEl };
     }
 
     // ==========================================
@@ -1198,12 +1219,12 @@
 
         updateActiveItem() {
             if (!this.container) return;
-            const scrollY = window.scrollY + 100;
             let current = null;
 
+            // 用视口相对位置判定:标题位于定位祖先内时 offsetTop 并非文档偏移,会算错高亮
             for (let i = 0; i < this.headings.length; i++) {
                 const h = this.headings[i];
-                if (h.el.offsetTop <= scrollY) {
+                if (h.el.getBoundingClientRect().top <= 120) {
                     current = h;
                 } else {
                     break;
@@ -1268,6 +1289,8 @@
             this.overlay.classList.add('pure-zen-active');
             document.documentElement.style.overflow = 'hidden';
             this.isActive = true;
+            // 目录面板层级低于遮罩,开着也看不到,进入沉浸模式时顺手收起
+            if (tocInstance.container && tocInstance.isOpen) tocInstance.toggle(false);
             showToast('已进入沉浸阅读模式 (按 ESC 或快捷键退出)');
         }
 
@@ -1445,11 +1468,13 @@
         },
 
         htmlToMarkdown(node) {
-            // 递归转换常用 HTML 标签至 Markdown
-            function walk(el) {
+            // 递归转换常用 HTML 标签至 Markdown;depth 用于嵌套列表缩进
+            function walk(el, depth) {
+                depth = depth || 0;
                 if (!el) return '';
                 if (el.nodeType === Node.TEXT_NODE) {
-                    return el.textContent;
+                    // 规范化源码缩进与换行,输出更干净的 Markdown
+                    return el.textContent.replace(/\s+/g, ' ');
                 }
                 if (el.nodeType !== Node.ELEMENT_NODE) return '';
 
@@ -1478,27 +1503,27 @@
 
                 // 处理排版标签
                 if (tag === 'p') {
-                    let childrenText = Array.from(el.childNodes).map(walk).join('');
+                    let childrenText = Array.from(el.childNodes).map(n => walk(n, depth)).join('');
                     return `\n\n${childrenText.trim()}\n\n`;
                 }
                 if (tag === 'strong' || tag === 'b') {
-                    return `**${Array.from(el.childNodes).map(walk).join('').trim()}**`;
+                    return `**${Array.from(el.childNodes).map(n => walk(n, depth)).join('').trim()}**`;
                 }
                 if (tag === 'em' || tag === 'i') {
-                    return `*${Array.from(el.childNodes).map(walk).join('').trim()}*`;
+                    return `*${Array.from(el.childNodes).map(n => walk(n, depth)).join('').trim()}*`;
                 }
                 if (tag === 'del' || tag === 's') {
-                    return `~~${Array.from(el.childNodes).map(walk).join('').trim()}~~`;
+                    return `~~${Array.from(el.childNodes).map(n => walk(n, depth)).join('').trim()}~~`;
                 }
                 if (tag === 'blockquote') {
-                    const text = Array.from(el.childNodes).map(walk).join('').trim();
+                    const text = Array.from(el.childNodes).map(n => walk(n, depth)).join('').trim();
                     return `\n\n> ${text.replace(/\n+/g, '\n> ')}\n\n`;
                 }
 
                 // 链接与图片
                 if (tag === 'a') {
                     const href = el.getAttribute('href');
-                    const text = Array.from(el.childNodes).map(walk).join('').trim() || href;
+                    const text = Array.from(el.childNodes).map(n => walk(n, depth)).join('').trim() || href;
                     return href ? `[${text}](${href})` : text;
                 }
                 if (tag === 'img') {
@@ -1507,19 +1532,30 @@
                     return src ? `\n\n![${alt}](${src})\n\n` : '';
                 }
 
-                // 列表
+                // 列表:由容器统一编号与缩进,li 仅负责拼接自身内容
+                if (tag === 'ul' || tag === 'ol') {
+                    const indent = '  '.repeat(depth);
+                    const items = Array.from(el.children).filter(child => child.tagName.toLowerCase() === 'li');
+                    const lines = items.map((li, i) => {
+                        const marker = tag === 'ol' ? `${i + 1}. ` : '- ';
+                        const inner = Array.from(li.childNodes).map(n => walk(n, depth + 1)).join('').trim();
+                        return indent + marker + inner;
+                    });
+                    return `\n\n${lines.join('\n')}\n\n`;
+                }
                 if (tag === 'li') {
-                    return `\n- ${Array.from(el.childNodes).map(walk).join('').trim()}`;
+                    return Array.from(el.childNodes).map(n => walk(n, depth)).join('').trim();
                 }
 
-                return Array.from(el.childNodes).map(walk).join('');
+                return Array.from(el.childNodes).map(n => walk(n, depth)).join('');
             }
 
+            // 整形时保留行首缩进(嵌套列表依赖它),仅去除行尾空白
             return walk(node)
-                .split('\n')
-                .map(line => line.trim())
-                .join('\n')
                 .replace(/\n{3,}/g, '\n\n')
+                .split('\n')
+                .map(line => line.replace(/\s+$/, ''))
+                .join('\n')
                 .trim();
         },
 
@@ -2223,15 +2259,16 @@
 
         bindGlobalKeys() {
             window.addEventListener('keydown', (e) => {
+                // 优先用 e.code 判定按键:macOS 按住 Option 时 e.key 会变成 '®' 等特殊字符,导致快捷键失灵
                 // Alt + R: 沉浸阅读
-                if (e.altKey && (e.key === 'r' || e.key === 'R')) {
+                if (e.altKey && (e.code === 'KeyR' || e.key === 'r' || e.key === 'R')) {
                     e.preventDefault();
                     zenInstance.toggle();
                 }
-                // Alt + T: 大纲
-                if (e.altKey && (e.key === 't' || e.key === 'T')) {
+                // Alt + T: 大纲 (沉浸阅读打开时目录被遮罩盖住,忽略触发)
+                if (e.altKey && (e.code === 'KeyT' || e.key === 't' || e.key === 'T')) {
                     e.preventDefault();
-                    tocInstance.toggle();
+                    if (!zenInstance.isActive) tocInstance.toggle();
                 }
             });
         }

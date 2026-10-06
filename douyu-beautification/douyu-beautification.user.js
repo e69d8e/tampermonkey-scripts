@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         斗鱼直播美化 - 极简纯净版
 // @namespace    https://github.com/douyu-beautification
-// @version      0.0.1
+// @version      0.0.2
 // @description  斗鱼直播间极简美化：移除广告、礼物栏、侧边推荐、活动弹窗等冗余元素，保留纯净的直播观看体验。支持自动最高画质、顶栏设置按钮、设置即时热生效。
 // @author       YH
 // @match        *://www.douyu.com/*
@@ -19,6 +19,8 @@
 
 (function () {
     'use strict';
+
+    const SCRIPT_VERSION = '0.0.2';
 
     const isHomepage = window.location.pathname === '/' || window.location.pathname === '/index.htm' || window.location.pathname === '/index.html';
 
@@ -108,6 +110,7 @@
                 .ScreenBannerAd, .BackpackSuper498, .PlayListC-ad,
                 section.layout-Banner, .layout-Bottom-banner,
                 .red-packet-wrap, .Title-followBox, .HeaderCell-banner,
+                [class*="IconCardAd"], [class*="iconCardAd"],
                 [class*="ad-wrap"], [class*="AdWrap"], [class*="banner-ad"],
                 [class*="adBanner"], [class*="AdBanner"], [class*="abAd"] {
                     display: none !important;
@@ -952,7 +955,8 @@
         removeAds: [
             '.MatchFocusFullPic', '.DropMenuList-ad', '.DropPane-ad',
             '.CloudGameLink', '.AdCover', '.google-auto-placed',
-            '.adsbygoogle', '.ScreenBannerAd', 'section.layout-Banner'
+            '.adsbygoogle', '.ScreenBannerAd', 'section.layout-Banner',
+            '[class*="IconCardAd"]'
         ],
         removeActivity: [
             '#js-room-activity', '.layout-Player-guessgame',
@@ -998,35 +1002,51 @@
         if (!config.autoHighQuality) return;
 
         retry(() => {
+            // 等待视频真正起播:未起播时画质切换会被播放器忽略或产生异常降级
+            const video = document.querySelector('video');
+            if (!video || video.paused) return false;
+
             const rateContainer = document.querySelector(SELECTORS.qualityRate);
-            if (rateContainer) {
-                const items = rateContainer.querySelectorAll('ul > li');
-                if (items.length > 0) {
-                    const highest = items[0];
-                    if (!highest.className.includes('selected')) {
-                        highest.click();
-                    }
-                    return true;
-                }
-            }
+            if (!rateContainer) return false;
 
-            const qualityBtns = document.querySelectorAll('.tipitem, [class*="QualityItem"], [class*="quality-item"]');
-            if (qualityBtns.length > 0) {
-                qualityBtns[0].click();
-                return true;
-            }
+            // 新版斗鱼画质下拉列表仅在悬停时才挂载到 DOM,必须先模拟悬停触发渲染
+            rateContainer.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+            rateContainer.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
 
-            const qualitySelector = document.querySelector('[class*="QualitySwitch"], [class*="quality-switch"]');
-            if (qualitySelector) {
-                qualitySelector.click();
+            // 容器内同时存在线路/画质等多种列表,按文本特征过滤出画质项
+            const items = Array.from(rateContainer.querySelectorAll('ul > li'))
+                .filter(li => /原画|蓝光|超清|高清|流畅|标清/.test(li.textContent));
+            if (items.length === 0) return false;
+
+            const highest = items[0];
+            if ((highest.className || '').includes('selected')) return true;
+
+            const prevSelected = rateContainer.querySelector('[class*="selected"]');
+            const prevText = prevSelected ? prevSelected.textContent.trim() : null;
+            highest.click();
+
+            // 未登录时点击"原画"会被斗鱼静默拒绝并降级到更低画质,检测到降级后回选原画质(仅尝试一次)
+            if (prevText) {
                 setTimeout(() => {
-                    const tipItems = document.querySelectorAll('.tipitem, [class*="QualityItem"]');
-                    if (tipItems.length > 0) tipItems[0].click();
-                }, 300);
-                return true;
+                    const container = document.querySelector(SELECTORS.qualityRate);
+                    if (!container) return;
+                    // 点击画质项后下拉列表即被卸载,复查与回选前必须重新悬停展开
+                    container.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                    container.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+                    setTimeout(() => {
+                        const cur = container.querySelector('[class*="selected"]');
+                        if (!cur) return;
+                        const freshItems = Array.from(container.querySelectorAll('ul > li'))
+                            .filter(li => /原画|蓝光|超清|高清|流畅|标清/.test(li.textContent));
+                        const curIdx = freshItems.findIndex(li => li.textContent.trim() === cur.textContent.trim());
+                        const prevIdx = freshItems.findIndex(li => li.textContent.trim() === prevText);
+                        if (prevIdx >= 0 && curIdx > prevIdx) {
+                            freshItems[prevIdx].click();
+                        }
+                    }, 600);
+                }, 2500);
             }
-
-            return false;
+            return true;
         }, 1200, 15);
     }
 
@@ -1079,15 +1099,24 @@
         });
     }
 
-    // ==========================================
-    //  MutationObserver 动态清理
-    // ==========================================
+    // MutationObserver 动态清理(类名片段 → 所属配置开关,尊重用户设置)
     const OBSERVER_CLASS_LIST = [
-        'MatchFocusFullPic', 'Prompt-container', 'AdCover',
-        'ScreenBannerAd', 'EnterEffect', 'RoomActivityFloat',
-        'ActivityReceivePopup', 'FansInteractPopup', 'FloatLayerContent',
-        'ToolbarCardModule', 'InteractEntryPanel', 'TreasureBox',
-        'BackgroundOpacity-layout', 'interactive__', 'toolbar__'
+        { cls: 'MatchFocusFullPic', key: 'removeAds' },
+        { cls: 'Prompt-container', key: 'removeAds' },
+        { cls: 'AdCover', key: 'removeAds' },
+        { cls: 'ScreenBannerAd', key: 'removeAds' },
+        { cls: 'IconCardAd', key: 'removeAds' },
+        { cls: 'EnterEffect', key: 'removeActivity' },
+        { cls: 'RoomActivityFloat', key: 'removeActivity' },
+        { cls: 'ActivityReceivePopup', key: 'removeActivity' },
+        { cls: 'FansInteractPopup', key: 'removeActivity' },
+        { cls: 'FloatLayerContent', key: 'removeActivity' },
+        { cls: 'TreasureBox', key: 'removeActivity' },
+        { cls: 'BackgroundOpacity-layout', key: 'removeActivity' },
+        { cls: 'ToolbarCardModule', key: 'removeRecommend' },
+        { cls: 'InteractEntryPanel', key: 'removeRecommend' },
+        { cls: 'interactive__', key: 'removeRecommend' },
+        { cls: 'toolbar__', key: 'removeRecommend' }
     ];
 
     let observerTimer = null;
@@ -1114,7 +1143,9 @@
                         shouldCleanHomepage = true;
                     }
 
-                    if (OBSERVER_CLASS_LIST.some(cls => (typeof node.className === 'string' && node.className.includes(cls)))) {
+                    // 仅在对应功能开关开启时隐藏,避免关闭配置后动态节点仍被强制隐藏
+                    const hit = OBSERVER_CLASS_LIST.find(item => typeof node.className === 'string' && node.className.includes(item.cls));
+                    if (hit && config[hit.key]) {
                         node.style.display = 'none';
                         shouldForceRemove = true;
                     }
@@ -1293,7 +1324,7 @@
                     <div class="panel-icon-badge">⚡</div>
                     <div>
                         <span class="panel-title">斗鱼美化设置</span>
-                        <span class="panel-version">v0.0.1</span>
+                        <span class="panel-version">v${SCRIPT_VERSION}</span>
                     </div>
                 </div>
                 <button class="panel-close" id="beautify-panel-close" title="关闭">
@@ -1412,7 +1443,7 @@
     });
 
     console.log(
-        '%c ⚡ 斗鱼美化 v0.0.1 已加载 %c 顶部导航栏可直接打开设置 ',
+        `%c ⚡ 斗鱼美化 v${SCRIPT_VERSION} 已加载 %c 顶部导航栏可直接打开设置 `,
         'background: linear-gradient(135deg, #ff6a00, #ee0979); color: #fff; padding: 4px 8px; border-radius: 4px 0 0 4px; font-weight: bold;',
         'background: #12121a; color: #ee0979; padding: 4px 8px; border-radius: 0 4px 4px 0; border: 1px solid #ee0979;'
     );
