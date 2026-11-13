@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         斗鱼直播美化 - 极简纯净版
 // @namespace    https://github.com/douyu-beautification
-// @version      0.0.2
+// @version      0.0.3
 // @description  斗鱼直播间极简美化：移除广告、礼物栏、侧边推荐、活动弹窗等冗余元素，保留纯净的直播观看体验。支持自动最高画质、顶栏设置按钮、设置即时热生效。
 // @author       YH
 // @match        *://www.douyu.com/*
@@ -12,6 +12,7 @@
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @run-at       document-start
+// @noframes
 // @license      MIT
 // @downloadURL  https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js
 // @updateURL    https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js
@@ -20,7 +21,9 @@
 (function () {
     'use strict';
 
-    const SCRIPT_VERSION = '0.0.2';
+    if (window.self !== window.top) return;
+
+    const SCRIPT_VERSION = '0.0.3';
 
     const isHomepage = window.location.pathname === '/' || window.location.pathname === '/index.htm' || window.location.pathname === '/index.html';
 
@@ -85,10 +88,10 @@
             '[class*="backgroundHolder__"]', '[class*="backgroundHolderBlur__"]',
             '[class*="backgroundHandleWrapper__"]', '[class*="backgroundHandle__"]'
         ],
-        controlBar: '[class*="ControlBar"], [class*="controlbar"]',
-        controlBarRight: '[class*="ControlBar"] [class*="right-"], [class*="controlbar"] [class*="right"]',
-        qualityRate: '[class*="rate-"], [class*="rate"]',
-        qualityList: '[class*="rate-"] ul > li, [class*="tipItem-"] ul > li, .tipitem, [class*="QualityItem"]',
+        controlBar: '#js-player-controlbar, [class*="ControlBar"], [class*="controlbar"]',
+        controlBarRight: '#js-player-controlbar [class*="right-"], [class*="ControlBar"] [class*="right-"], [class*="controlbar"] [class*="right"]',
+        qualityRate: '#js-player-controlbar [class*="rate-"], [class*="ControlBar"] [class*="rate-"], [class*="controlbar"] [class*="rate-"]',
+        qualityList: '#js-player-controlbar [class*="rate-"] ul > li, [class*="ControlBar"] [class*="rate-"] ul > li, [class*="tipItem-"] ul > li, [class*="QualityItem"]',
         danmuWrap: '[class*="showdanmuWrap"]',
         volumeWrap: '[class*="volume-"]',
         video: 'video'
@@ -151,6 +154,7 @@
                 .Header-toggle-btn, .Header-menu-wrap,
                 .Header-history-wrap, .Header-download-wrap,
                 .Header-broadcast-wrap, .Header-createcenter-wrap,
+                .Header-taskentry-wrap,
                 [class*="headerDropdown"], [class*="download-app"] {
                     display: none !important;
                 }
@@ -162,6 +166,24 @@
                 .Header-left {
                     flex: 0 !important;
                     min-width: 0 !important;
+                }
+                .Header .Search,
+                .Header .Search-Input,
+                #js-header [class*="search"] input {
+                    background: rgba(255, 255, 255, 0.08) !important;
+                    border-color: rgba(255, 255, 255, 0.14) !important;
+                    color: #e8e8e8 !important;
+                }
+                .Header .Search-text {
+                    background: transparent !important;
+                    color: #e8e8e8 !important;
+                }
+                .Header .Search-text::placeholder {
+                    color: rgba(255, 255, 255, 0.45) !important;
+                }
+                .Header .Search-icon,
+                .Header .Search-search {
+                    color: rgba(255, 255, 255, 0.65) !important;
                 }
             `);
         }
@@ -189,10 +211,9 @@
                 .layout-Player-gift, #js-gift-bar, .Gift-498,
                 .BottomBar, .layout-Player-bar498,
                 .layout-Player-rankHover, .BackpackMainBtn,
-                [class*="GiftBar"], [class*="gift-bar"], [class*="gift-wrap"],
-                [class*="gift" i], [class*="Gift" i],
-                [class*="backpack" i], [class*="Backpack" i],
-                [class*="recharge" i], [class*="Recharge" i] {
+                [class*="GiftBar"], [class*="giftBar"], [class*="gift-bar"], [class*="gift-wrap"],
+                [class*="GiftBag"], [class*="Backpack"], [class*="backpack-"],
+                [class*="Recharge"], [class*="recharge-"] {
                     display: none !important;
                 }
             `);
@@ -233,6 +254,7 @@
                 .RoomFocusBanner, .PkBox498,
                 .DiamondNoble, .FansRankBox,
                 [class*="Activity"], [class*="activity"],
+                [class*="title__"] [class*="activeContainer__"],
                 [class*="lottery"], [class*="Lottery"],
                 [class*="TreasureBox"], [class*="GuessGame"],
                 /* 屏蔽活动定制皮肤的巨型置顶 Banner 及下推背景 */
@@ -307,17 +329,19 @@
 
         // ---- 播放器尺寸智能适配（全屏满屏 vs 普通模式居中完整大窗） ----
         if (config.playerExpand) {
+            const showChat = !config.removeAside || config.showChatPanel;
+            const hideBottomToolbar = config.removeGiftBar || config.removeRecommend;
+            const nonFs = 'body:not([class*="is-fullScreen"]):not([class*="wfs"]):not([class*="fullscreen"])';
+
             rules.push(`
                 /* ==================== 全屏 / 网页全屏模式 (100% 充满屏幕，0px 留白) ==================== */
-                body.is-fullScreenPage,
-                body.is-fullScreen,
+                body[class*="is-fullScreen"],
                 body[class*="wfs"],
                 body[class*="fullscreen"] {
                     overflow: hidden !important;
                 }
 
-                body.is-fullScreenPage [class*="stage__"],
-                body.is-fullScreen [class*="stage__"],
+                body[class*="is-fullScreen"] [class*="stage__"],
                 body[class*="wfs"] [class*="stage__"],
                 body[class*="fullscreen"] [class*="stage__"],
                 :fullscreen [class*="stage__"] {
@@ -332,12 +356,9 @@
                     margin: 0 !important;
                 }
 
-                body.is-fullScreenPage [class*="player__jsy1T"],
-                body.is-fullScreen [class*="player__jsy1T"],
-                body[class*="wfs"] [class*="player__jsy1T"],
-                body[class*="fullscreen"] [class*="player__jsy1T"],
-                body.is-fullScreenPage [class*="player__"],
-                body.is-fullScreen [class*="player__"],
+                body[class*="is-fullScreen"] [class*="player__"],
+                body[class*="wfs"] [class*="player__"],
+                body[class*="fullscreen"] [class*="player__"],
                 :fullscreen [class*="player__"] {
                     width: 100% !important;
                     height: 100% !important;
@@ -349,11 +370,9 @@
                     padding: 0 !important;
                 }
 
-                body.is-fullScreenPage [class*="stream__T55I3"],
-                body.is-fullScreen [class*="stream__T55I3"],
-                body[class*="wfs"] [class*="stream__T55I3"],
-                body.is-fullScreenPage [class*="stream__"],
-                body.is-fullScreen [class*="stream__"],
+                body[class*="is-fullScreen"] [class*="stream__"],
+                body[class*="wfs"] [class*="stream__"],
+                body[class*="fullscreen"] [class*="stream__"],
                 :fullscreen [class*="stream__"] {
                     inset: 0 !important;
                     top: 0 !important;
@@ -364,27 +383,24 @@
                     height: 100% !important;
                 }
 
-                body.is-fullScreenPage [class*="video__VfhVg"],
-                body.is-fullScreen [class*="video__VfhVg"],
-                body.is-fullScreenPage [class*="video__"],
-                body.is-fullScreen [class*="video__"],
-                body.is-fullScreenPage #js-player-video,
-                body.is-fullScreen #js-player-video,
-                body.is-fullScreenPage #js-player-video-case,
-                body.is-fullScreen #js-player-video-case,
-                body.is-fullScreenPage video,
-                body.is-fullScreen video,
-                body.is-fullScreenPage #__video2,
-                body.is-fullScreen #__video2 {
+                body[class*="is-fullScreen"] [class*="video__"],
+                body[class*="wfs"] [class*="video__"],
+                body[class*="fullscreen"] [class*="video__"],
+                body[class*="is-fullScreen"] #js-player-video,
+                body[class*="is-fullScreen"] #js-player-video-case,
+                body[class*="is-fullScreen"] video,
+                body[class*="is-fullScreen"] #__video2,
+                :fullscreen video {
                     width: 100% !important;
                     height: 100% !important;
                     inset: 0 !important;
                     object-fit: contain !important;
                 }
 
-                body.is-fullScreenPage [class*="case__"],
-                body.is-fullScreen [class*="case__"],
-                body[class*="wfs"] [class*="case__"] {
+                body[class*="is-fullScreen"] [class*="case__"],
+                body[class*="wfs"] [class*="case__"],
+                body[class*="fullscreen"] [class*="case__"],
+                :fullscreen [class*="case__"] {
                     bottom: 0 !important;
                     position: absolute !important;
                     width: 100% !important;
@@ -392,8 +408,8 @@
                     right: 0 !important;
                 }
 
-                /* ==================== 非全屏普通模式 (16:9 比例自适应居中大窗，不遮顶、不切边) ==================== */
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="playerWrap__"] {
+                /* ==================== 非全屏普通模式 (16:9 比例自适应居中大窗，不遮顶、不切控制栏) ==================== */
+                ${nonFs} [class*="playerWrap__"] {
                     display: flex !important;
                     justify-content: center !important;
                     width: 100% !important;
@@ -403,51 +419,128 @@
                     top: 0 !important;
                 }
 
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="playerWrap__"] > div:not([class*="playerBackground"]):not(#js-account-security) {
+                ${nonFs} [class*="playerWrap__"] > div:not([class*="playerBackground"]):not(#js-account-security):not([class*="snapbar__"]):not([class*="menu__"]) {
                     display: flex !important;
                     justify-content: center !important;
                     width: 100% !important;
                 }
 
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="stage__"],
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) #js-player-main,
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="main__a3F0Y"],
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="main__"] {
+                ${nonFs} [class*="stage__"] {
                     display: flex !important;
                     justify-content: center !important;
-                    width: auto !important;
-                    max-width: 100% !important;
+                    align-items: stretch !important;
+                    ${showChat
+                        ? 'width: 100% !important; max-width: 100% !important; gap: 10px !important;'
+                        : 'width: auto !important; max-width: 96vw !important;'}
                     margin: 0 auto !important;
-                    height: calc(100vh - 74px) !important;
-                    max-height: calc(100vh - 74px) !important;
+                    height: ${showChat
+                        ? 'min(calc(100vh - 76px), calc((min(96vw, 1493px) - 390px) * 9 / 16 + 122px))'
+                        : 'min(calc(100vh - 76px), calc(94vw * 9 / 16 + 122px))'} !important;
+                    max-height: calc(100vh - 76px) !important;
                 }
 
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="player__jsy1T"],
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="player__"] {
-                    width: calc((100vh - 74px) * 16 / 9) !important;
-                    max-width: 95vw !important;
-                    height: calc(100vh - 74px) !important;
-                    max-height: calc(100vh - 74px) !important;
+                ${nonFs} #js-player-main,
+                ${nonFs} [class*="stage__"] > [class*="main__"] {
+                    display: flex !important;
+                    justify-content: center !important;
+                    ${showChat ? 'flex: 1 1 0% !important; min-width: 0 !important;' : 'width: auto !important;'}
+                    max-width: 100% !important;
+                    margin: 0 auto !important;
+                    height: 100% !important;
+                    max-height: 100% !important;
+                }
+
+                ${nonFs} [class*="player__"] {
+                    width: ${showChat ? '100%' : 'min(94vw, calc((100vh - 198px) * 16 / 9))'} !important;
+                    max-width: 100% !important;
+                    height: 100% !important;
+                    max-height: 100% !important;
                     position: relative !important;
                     margin: 0 auto !important;
                     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
                     border-radius: 8px !important;
                     overflow: hidden !important;
+                    background: #000 !important;
                 }
 
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="stream__T55I3"],
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="stream__"],
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="video__VfhVg"],
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) [class*="video__"],
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) #js-player-video,
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) #js-player-video-case,
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) video,
-                body:not(.is-fullScreenPage):not(.is-fullScreen):not([class*="wfs"]):not([class*="fullscreen"]) #__video2 {
+                ${showChat ? `
+                ${nonFs} [class*="stage__"] > [class*="sidebar"] {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    position: relative !important;
+                    top: auto !important;
+                    right: auto !important;
+                    bottom: auto !important;
+                    left: auto !important;
+                    flex: 0 0 380px !important;
+                    width: 380px !important;
+                    height: 100% !important;
+                    max-height: 100% !important;
+                    border-radius: 8px !important;
+                    overflow: hidden !important;
+                    z-index: 2 !important;
+                }
+                ` : ''}
+
+                ${nonFs} [class*="player__"] > [class*="title__"] {
+                    position: absolute !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    right: 0 !important;
+                    height: 72px !important;
+                    z-index: 3 !important;
+                    background: #12121a !important;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+                }
+
+                ${nonFs} [class*="stream__"] {
+                    position: absolute !important;
+                    top: 72px !important;
+                    bottom: ${hideBottomToolbar ? '50px' : '108px'} !important;
+                    left: 0 !important;
+                    right: 0 !important;
+                    width: 100% !important;
+                    height: auto !important;
+                    overflow: visible !important;
+                }
+
+                ${nonFs} [class*="video__"],
+                ${nonFs} #js-player-video,
+                ${nonFs} #js-player-video-case,
+                ${nonFs} video,
+                ${nonFs} #__video2 {
                     width: 100% !important;
                     height: 100% !important;
                     inset: 0 !important;
                     object-fit: contain !important;
-                    border-radius: 8px !important;
+                }
+
+                ${hideBottomToolbar ? `
+                ${nonFs} [class*="case__"] {
+                    bottom: -50px !important;
+                    top: auto !important;
+                    left: 0 !important;
+                    right: 0 !important;
+                    width: 100% !important;
+                    height: 66px !important;
+                    padding: 0 !important;
+                    position: absolute !important;
+                    transform: none !important;
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                    z-index: 5 !important;
+                }
+                ` : ''}
+
+                ${nonFs} #js-player-controlbar,
+                ${nonFs} #js-player-controlbar > [class*="ControlBar"] {
+                    position: relative !important;
+                    bottom: 0 !important;
+                    transform: none !important;
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                    pointer-events: auto !important;
+                    background: #101018 !important;
                 }
 
                 /* 旧版布局选择器兼容 */
@@ -659,6 +752,26 @@
             #douyu-beautify-panel .panel-close:hover {
                 background: rgba(255, 255, 255, 0.12);
                 color: #fff;
+            }
+            #douyu-beautify-panel .panel-close svg {
+                width: 14px !important;
+                height: 14px !important;
+                stroke: rgba(255, 255, 255, 0.85) !important;
+                stroke-width: 2.2px !important;
+                fill: none !important;
+                display: block !important;
+                pointer-events: none !important;
+            }
+            #douyu-beautify-panel .panel-close:hover svg {
+                stroke: #fff !important;
+            }
+            #douyu-beautify-panel .panel-tab svg {
+                width: 13px !important;
+                height: 13px !important;
+                stroke: currentColor !important;
+                stroke-width: 2px !important;
+                fill: none !important;
+                flex-shrink: 0 !important;
             }
             #douyu-beautify-panel .panel-tabs {
                 display: flex;
@@ -879,24 +992,61 @@
     //  样式引擎与即时应用
     // ==========================================
     let dynamicStyleEl = null;
+    let lastCssText = '';
+    let styleAttachObserver = null;
 
     function applyStyles() {
         const cssText = generateBaseCSS() + '\n' + generateHideCSS();
-        if (dynamicStyleEl) {
+        if (cssText === lastCssText && dynamicStyleEl && dynamicStyleEl.isConnected) {
+            return;
+        }
+        lastCssText = cssText;
+
+        let injectedViaGm = false;
+        if (dynamicStyleEl && dynamicStyleEl.isConnected) {
             dynamicStyleEl.textContent = cssText;
+            injectedViaGm = true;
         } else {
-            if (typeof GM_addStyle !== 'undefined') {
-                dynamicStyleEl = GM_addStyle(cssText);
-            } else {
-                const target = document.head || document.documentElement || document.body;
-                if (target) {
-                    dynamicStyleEl = document.createElement('style');
-                    dynamicStyleEl.textContent = cssText;
-                    target.appendChild(dynamicStyleEl);
-                } else {
-                    onDomReady(applyStyles);
-                    return;
+            const existing = document.getElementById('douyu-beautify-style');
+            if (existing) {
+                dynamicStyleEl = existing;
+                dynamicStyleEl.textContent = cssText;
+                injectedViaGm = true;
+            } else if (typeof GM_addStyle !== 'undefined') {
+                try {
+                    const injected = GM_addStyle(cssText);
+                    if (injected && typeof injected === 'object' && 'textContent' in injected) {
+                        injected.id = 'douyu-beautify-style';
+                        dynamicStyleEl = injected;
+                    } else {
+                        dynamicStyleEl = null;
+                    }
+                    injectedViaGm = true;
+                } catch (e) {
+                    injectedViaGm = false;
                 }
+            }
+        }
+        if (!injectedViaGm) {
+            const target = document.head || document.documentElement;
+            const style = document.createElement('style');
+            style.id = 'douyu-beautify-style';
+            style.textContent = cssText;
+            dynamicStyleEl = style;
+            if (target) {
+                target.appendChild(style);
+            } else if (!styleAttachObserver) {
+                styleAttachObserver = new MutationObserver(() => {
+                    const t = document.head || document.documentElement;
+                    if (t) {
+                        t.appendChild(dynamicStyleEl);
+                        styleAttachObserver.disconnect();
+                        styleAttachObserver = null;
+                    }
+                });
+                try {
+                    styleAttachObserver.observe(document, { childList: true });
+                } catch (e) { /* ignore */ }
             }
         }
         setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
@@ -940,9 +1090,19 @@
         if (!toast) {
             toast = document.createElement('div');
             toast.id = 'douyu-beautify-toast';
+            const icon = document.createElement('span');
+            icon.textContent = '✓';
+            icon.style.cssText = 'color:#ff5d23;font-size:14px;line-height:1;font-weight:bold;';
+            const textSpan = document.createElement('span');
+            textSpan.className = 'douyu-beautify-toast-text';
+            toast.appendChild(icon);
+            toast.appendChild(textSpan);
             document.body.appendChild(toast);
         }
-        toast.innerHTML = `<span style="color:#ff5d23;font-size:14px;line-height:1;font-weight:bold;">✓</span><span>${message}</span>`;
+        const textEl = toast.querySelector('.douyu-beautify-toast-text');
+        if (textEl) {
+            textEl.textContent = message;
+        }
         toast.classList.add('is-visible');
         clearTimeout(toastTimer);
         toastTimer = setTimeout(() => toast?.classList.remove('is-visible'), duration);
@@ -972,15 +1132,51 @@
         ]
     };
 
+    function hideElementByScript(el, key) {
+        if (!el || el.classList.contains('playerWrap__') || el.querySelector?.('video')) return;
+        if (el.dataset.douyuHidden !== key) {
+            el.dataset.douyuPrevDisplay = el.style.display || '';
+            el.dataset.douyuHidden = key;
+        }
+        if (el.style.display !== 'none') {
+            el.style.display = 'none';
+        }
+    }
+
+    function restoreHiddenElements(key) {
+        document.querySelectorAll(`[data-douyu-hidden="${key}"]`).forEach(el => {
+            el.style.display = el.dataset.douyuPrevDisplay || '';
+            delete el.dataset.douyuHidden;
+            delete el.dataset.douyuPrevDisplay;
+        });
+    }
+
+    function stopAdVideos() {
+        if (!config.removeAds) return;
+        document.querySelectorAll('video').forEach(v => {
+            if (isHomepage) return;
+            if (v.closest('[class*="stream__"], #js-web-stream, [class*="player__"]')) return;
+            const src = v.currentSrc || v.getAttribute('src') || '';
+            const isAdNode = src.includes('/adxdsp/') || v.closest('[class*="ad-wrap"], [class*="AdWrap"], [class*="AdBanner"], [class*="adBanner"], [class*="IconCardAd"], .AdCover');
+            if (isAdNode) {
+                try {
+                    if (!v.paused) v.pause();
+                    v.muted = true;
+                    v.autoplay = false;
+                } catch (e) { /* ignore */ }
+            }
+        });
+    }
+
     function forceRemoveElements() {
         Object.entries(JS_REMOVE_SELECTORS).forEach(([key, selectors]) => {
             if (config[key]) {
-                selectors.forEach(sel => document.querySelectorAll(sel).forEach(el => {
-                    if (el.classList.contains('playerWrap__') || el.querySelector?.('video')) return;
-                    el.style.display = 'none';
-                }));
+                selectors.forEach(sel => document.querySelectorAll(sel).forEach(el => hideElementByScript(el, key)));
+            } else {
+                restoreHiddenElements(key);
             }
         });
+        stopAdVideos();
     }
 
     // ==========================================
@@ -998,10 +1194,29 @@
         return document.querySelector('[class*="wfs"], [class*="WebScreen"], .controlbar-item-wfs, [title="网页全屏"]');
     }
 
+    const QUALITY_REGEX = /原画|蓝光|超清|高清|流畅|标清/;
+    let qualitySelectedDone = false;
+    let qualityPlayHooked = false;
+
+    function getQualityItems(container) {
+        return Array.from(container.querySelectorAll('ul > li'))
+            .filter(li => QUALITY_REGEX.test(li.textContent));
+    }
+
     function autoHighQuality() {
-        if (!config.autoHighQuality) return;
+        if (!config.autoHighQuality || qualitySelectedDone) return;
+
+        if (!qualityPlayHooked) {
+            qualityPlayHooked = true;
+            document.addEventListener('play', (e) => {
+                if (!qualitySelectedDone && e.target && e.target.tagName === 'VIDEO') {
+                    setTimeout(autoHighQuality, 300);
+                }
+            }, true);
+        }
 
         retry(() => {
+            if (qualitySelectedDone) return true;
             // 等待视频真正起播:未起播时画质切换会被播放器忽略或产生异常降级
             const video = document.querySelector('video');
             if (!video || video.paused) return false;
@@ -1014,16 +1229,20 @@
             rateContainer.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
 
             // 容器内同时存在线路/画质等多种列表,按文本特征过滤出画质项
-            const items = Array.from(rateContainer.querySelectorAll('ul > li'))
-                .filter(li => /原画|蓝光|超清|高清|流畅|标清/.test(li.textContent));
+            const items = getQualityItems(rateContainer);
             if (items.length === 0) return false;
 
+            qualitySelectedDone = true;
             const highest = items[0];
-            if ((highest.className || '').includes('selected')) return true;
+            if ((highest.className || '').includes('selected')) {
+                setTimeout(() => rateContainer.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true })), 80);
+                return true;
+            }
 
             const prevSelected = rateContainer.querySelector('[class*="selected"]');
             const prevText = prevSelected ? prevSelected.textContent.trim() : null;
             highest.click();
+            setTimeout(() => rateContainer.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true })), 80);
 
             // 未登录时点击"原画"会被斗鱼静默拒绝并降级到更低画质,检测到降级后回选原画质(仅尝试一次)
             if (prevText) {
@@ -1034,14 +1253,17 @@
                     container.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
                     container.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
                     setTimeout(() => {
-                        const cur = container.querySelector('[class*="selected"]');
-                        if (!cur) return;
-                        const freshItems = Array.from(container.querySelectorAll('ul > li'))
-                            .filter(li => /原画|蓝光|超清|高清|流畅|标清/.test(li.textContent));
-                        const curIdx = freshItems.findIndex(li => li.textContent.trim() === cur.textContent.trim());
-                        const prevIdx = freshItems.findIndex(li => li.textContent.trim() === prevText);
-                        if (prevIdx >= 0 && curIdx > prevIdx) {
-                            freshItems[prevIdx].click();
+                        try {
+                            const cur = container.querySelector('[class*="selected"]');
+                            if (!cur) return;
+                            const freshItems = getQualityItems(container);
+                            const curIdx = freshItems.findIndex(li => li.textContent.trim() === cur.textContent.trim());
+                            const prevIdx = freshItems.findIndex(li => li.textContent.trim() === prevText);
+                            if (prevIdx >= 0 && curIdx > prevIdx) {
+                                freshItems[prevIdx].click();
+                            }
+                        } finally {
+                            container.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
                         }
                     }, 600);
                 }, 2500);
@@ -1054,9 +1276,12 @@
         if (!config.autoWebFullscreen) return;
 
         retry(() => {
-            const isAlreadyWfs = document.body.classList.contains('is-fullScreenPage') ||
-                                 document.body.className.includes('wfs') ||
-                                 document.body.className.includes('fullscreen');
+            const bodyCls = document.body?.className || '';
+            const isAlreadyWfs = document.body?.classList.contains('is-fullScreenPage') ||
+                                 document.body?.classList.contains('is-fullScreenPageNew') ||
+                                 bodyCls.includes('is-fullScreen') ||
+                                 bodyCls.includes('wfs') ||
+                                 bodyCls.includes('fullscreen');
             if (isAlreadyWfs) return true;
 
             const btn = getWebFullscreenButton();
@@ -1071,30 +1296,43 @@
     // ==========================================
     //  首页视频清理
     // ==========================================
+    function stopHomepageVideo(video) {
+        if (!isHomepage || !video) return;
+        try {
+            if (!video.paused) video.pause();
+            video.autoplay = false;
+            video.muted = true;
+            if (uiMounted) {
+                if (video.hasAttribute('autoplay')) video.removeAttribute('autoplay');
+                if (video.hasAttribute('src')) {
+                    video.removeAttribute('src');
+                    video.srcObject = null;
+                } else if (video.srcObject) {
+                    video.srcObject = null;
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    if (isHomepage) {
+        const onHomepageMediaStart = (e) => {
+            if (e.target && e.target.tagName === 'VIDEO') {
+                stopHomepageVideo(e.target);
+            }
+        };
+        document.addEventListener('play', onHomepageMediaStart, true);
+        document.addEventListener('playing', onHomepageMediaStart, true);
+        document.addEventListener('loadedmetadata', onHomepageMediaStart, true);
+    }
+
     function cleanHomepagePlayer() {
         if (!isHomepage) return;
 
-        document.querySelectorAll('video').forEach(video => {
-            try {
-                video.pause();
-                video.muted = true;
-                video.src = '';
-                video.srcObject = null;
-                video.load();
-            } catch (e) { /* ignore */ }
-        });
+        document.querySelectorAll('video').forEach(stopHomepageVideo);
 
         SELECTORS.homepagePlayer.forEach(sel => {
             document.querySelectorAll(sel).forEach(el => {
-                el.querySelectorAll('video').forEach(v => {
-                    try {
-                        v.pause();
-                        v.muted = true;
-                        v.src = '';
-                        v.srcObject = null;
-                        v.load();
-                    } catch (e) { /* ignore */ }
-                });
+                el.querySelectorAll('video').forEach(stopHomepageVideo);
             });
         });
     }
@@ -1120,14 +1358,28 @@
     ];
 
     let observerTimer = null;
+    let uiMounted = false;
+    let reattachTimer = null;
+
+    function mountUI() {
+        uiMounted = true;
+        if (isHomepage) cleanHomepagePlayer();
+        forceRemoveElements();
+        createSettingsPanel();
+        createHeaderSettingsButton();
+    }
+
     function startObserver() {
+        if (!document.body) return;
         const observer = new MutationObserver((mutations) => {
             let shouldCleanHomepage = false;
             let shouldForceRemove = false;
+            let shouldReattachHeaderBtn = false;
 
             for (const mutation of mutations) {
                 for (const node of mutation.addedNodes) {
                     if (node.nodeType !== 1) continue;
+                    if (node.id && node.id.startsWith('douyu-beautify-')) continue;
 
                     if (isHomepage && (
                         node.tagName === 'VIDEO' ||
@@ -1143,11 +1395,22 @@
                         shouldCleanHomepage = true;
                     }
 
-                    // 仅在对应功能开关开启时隐藏,避免关闭配置后动态节点仍被强制隐藏
-                    const hit = OBSERVER_CLASS_LIST.find(item => typeof node.className === 'string' && node.className.includes(item.cls));
-                    if (hit && config[hit.key]) {
-                        node.style.display = 'none';
-                        shouldForceRemove = true;
+                    // 仅在对应功能开关开启且 UI 已就绪后隐藏，避免水合前改写 DOM 属性触发 React #418
+                    if (uiMounted) {
+                        const hit = OBSERVER_CLASS_LIST.find(item => typeof node.className === 'string' && node.className.includes(item.cls));
+                        if (hit && config[hit.key]) {
+                            hideElementByScript(node, hit.key);
+                            shouldForceRemove = true;
+                        }
+                    }
+                }
+
+                if (uiMounted && !shouldReattachHeaderBtn) {
+                    for (const node of mutation.removedNodes) {
+                        if (node.nodeType === 1 && (node.id === 'douyu-beautify-header-btn' || node.querySelector?.('#douyu-beautify-header-btn'))) {
+                            shouldReattachHeaderBtn = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -1159,6 +1422,13 @@
                     forceRemoveElements();
                     observerTimer = null;
                 }, 200);
+            }
+
+            if (shouldReattachHeaderBtn && !reattachTimer) {
+                reattachTimer = setTimeout(() => {
+                    reattachTimer = null;
+                    createHeaderSettingsButton();
+                }, 150);
             }
         });
 
@@ -1392,6 +1662,13 @@
                 updatePanelPosition();
             }
         });
+
+        // 按下 Escape 关闭面板
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && panel.classList.contains('is-visible')) {
+                togglePanel(false);
+            }
+        });
     }
 
     // ==========================================
@@ -1411,21 +1688,21 @@
     onDomReady(() => {
         if (isHomepage) cleanHomepagePlayer();
         applyStyles();
-        forceRemoveElements();
-        createSettingsPanel();
-        createHeaderSettingsButton();
         startObserver();
+        // 兜底挂载: 若资源阻塞导致 load 延迟太久，等待 Next.js 水合完成后再挂载设置 UI
+        setTimeout(() => {
+            if (!uiMounted) mountUI();
+        }, 2200);
     });
 
     onPageLoaded(() => {
         if (isHomepage) cleanHomepagePlayer();
+        // 避开 Next.js SSR 首帧水合窗口后再挂载设置按钮/面板，避免触发 React #418 及节点被冲掉
         setTimeout(() => {
             if (isHomepage) cleanHomepagePlayer();
-            forceRemoveElements();
             applyStyles();
-            createSettingsPanel();
-            createHeaderSettingsButton();
-        }, 500);
+            mountUI();
+        }, 600);
 
         // 延迟执行自动化画质与全屏，等待播放器 UI 渲染完毕
         setTimeout(() => {
@@ -1436,9 +1713,7 @@
         // 处理懒加载内容
         setTimeout(() => {
             if (isHomepage) cleanHomepagePlayer();
-            forceRemoveElements();
-            createSettingsPanel();
-            createHeaderSettingsButton();
+            if (uiMounted) mountUI();
         }, 5000);
     });
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         纯净阅读 (PureReader) - 沉浸阅读与通用排版增强
 // @namespace    https://github.com/e69d8e/tampermonkey-scripts
-// @version      0.0.2
+// @version      0.0.3
 // @description  专为 CSDN、知乎、掘金、简书、博客园、微信公众号打造的纯净阅读器：免登录浏览、解除复制限制、拦截广告弹窗、外链直达、悬浮大纲目录 (TOC)、沉浸式极简阅读模式、一键导出 Markdown / PDF。
 // @author       YH
 // @match        *://*.csdn.net/*
@@ -17,6 +17,7 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_setClipboard
 // @run-at       document-start
+// @noframes
 // @license      MIT
 // @downloadURL  https://github.com/e69d8e/tampermonkey-scripts/raw/main/pure-reader/pure-reader.user.js
 // @updateURL    https://github.com/e69d8e/tampermonkey-scripts/raw/main/pure-reader/pure-reader.user.js
@@ -164,6 +165,32 @@
     const isCnblogs = host.includes('cnblogs.com');
     const isWeixin = host.includes('mp.weixin.qq.com');
 
+    function isAuthPage() {
+        const path = window.location.pathname || '';
+        return host.includes('passport.') || /^\/(signin|login|signup|register|account\/login)\b/i.test(path);
+    }
+
+    function isPureUiElement(node) {
+        if (!node || node.nodeType !== 1) return false;
+        if (node.id && node.id.startsWith('pure-')) return true;
+        return !!node.closest?.('#pure-dock, #pure-toc-panel, #pure-zen-overlay, #pure-modal-mask, #pure-toast');
+    }
+
+    function escapeHtml(str) {
+        return String(str || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function normalizeMediaUrl(src) {
+        if (!src) return '';
+        const trimmed = src.trim();
+        return trimmed.startsWith('//') ? `https:${trimmed}` : trimmed;
+    }
+
     // CSDN 前置劫持与反强制重定向防御护盾：
     // 1. 置空全局代码块 AI 推广配置，从源头阻止广告按钮生成
     // 2. 伪造/桩化 window.csdn.loginBox 与 userLogin，利用 CSDN 自带检查提前终止登录弹窗与倒计时重定向
@@ -283,15 +310,18 @@
     //  4. 样式注入引擎 (document-start 防闪烁)
     // ==========================================
     function injectStartCSS() {
+        if (isAuthPage() || window.__pureStartCssInjected) return;
+        window.__pureStartCssInjected = true;
         const rules = [];
 
-        // 全局基础抗阻断样式（解除选择限制）
+        // 全局基础抗阻断样式（精确作用于阅读正文容器，避免污染控件与脚本 UI）
         if (config.unblockCopy) {
             rules.push(`
-                *, body, article, main, .article-content, #article_content,
+                html, body, article, main, .article-content, #article_content,
                 #js_content, #js_content *, .rich_media_content, .rich_media_content *,
                 ._2rhmJa, ._2rhmJa *, #cnblogs_post_body, #cnblogs_post_body *,
-                .RichContent, .post_body, pre, code {
+                .RichContent, .RichContent *, .post_body, .post_body *,
+                .markdown-body, .markdown-body *, pre, pre *, code, code * {
                     -webkit-user-select: text !important;
                     user-select: text !important;
                 }
@@ -396,7 +426,8 @@
                     }
                     .Modal-wrapper, .Modal-enter-done, .sign-flow-modal,
                     .SignFlowModal, .SignFlowModal-wrap, .SignFlow-content,
-                    .OpenInAppButton, .css-1ynzxqw, .css-1m8koxr, .css-1p2r0e3 {
+                    .OpenInAppButton, .css-woosw9, .KanshanCornerButton,
+                    .CornerButtons--kanshan, .css-1ynzxqw, .css-1m8koxr, .css-1p2r0e3 {
                         display: none !important;
                     }
                 `);
@@ -462,9 +493,18 @@
                         flex: 1 1 auto !important;
                         box-sizing: border-box !important;
                     }
-                    .QuestionHeader, .QuestionHeader-footer {
+                    .QuestionHeader, .QuestionHeader-footer, .QuestionHeader-footer-inner {
                         width: 100% !important;
                         box-sizing: border-box !important;
+                    }
+                    .QuestionHeader-main {
+                        width: auto !important;
+                        flex: 1 1 auto !important;
+                        min-width: 0 !important;
+                        padding-left: 0 !important;
+                    }
+                    .QuestionHeader-side {
+                        flex-shrink: 0 !important;
                     }
                 `);
             }
@@ -542,16 +582,14 @@
                     body, ._3VRLsv, ._213wzc {
                         padding-top: 0 !important;
                     }
-                    ._3Pnjry {
-                        margin-top: 16px !important;
-                    }
                 `);
             }
             if (config.removeAds) {
                 rules.push(`
                     .download-app-guidance, .call-app-btn, aside, footer,
                     .note-comment, .recommended-notes, .ant-modal-root,
-                    [class*="ad-"], .app-open-guide {
+                    ._3Pnjry, [class^="ad-"], [class*=" ad-"], [class*="-ad-"],
+                    [class$="-ad"], .app-open-guide {
                         display: none !important;
                     }
                 `);
@@ -559,6 +597,9 @@
             if (config.jianshu_removeAppPrompt || config.wideArticleLayout) {
                 const jianshuMaxWidth = config.wideArticleLayout ? '1000px' : '860px';
                 rules.push(`
+                    ._3Pnjry {
+                        display: none !important;
+                    }
                     div._3VRLsv {
                         width: 100% !important;
                         max-width: ${jianshuMaxWidth} !important;
@@ -566,7 +607,7 @@
                         justify-content: center !important;
                         box-sizing: border-box !important;
                     }
-                    div._gp-ck, section.ouvJEz, section, article._2rhmJa, article, ._3Pnjry {
+                    div._gp-ck, section.ouvJEz, article._2rhmJa {
                         width: 100% !important;
                         max-width: 100% !important;
                         margin: 0 auto !important;
@@ -667,17 +708,27 @@
     //  5. 核心拦截器：防复制解禁与剪贴板净化
     // ==========================================
     function setupCopyGuard() {
-        if (!config.unblockCopy) return;
+        if (!config.unblockCopy || isAuthPage() || window.__pureCopyGuardBound) return;
+        window.__pureCopyGuardBound = true;
 
-        // 1. 捕获阶段拦截 copy 事件，剔除版权小尾巴
-        document.addEventListener('copy', function (e) {
+        // 1. 捕获阶段优先于宿主事件拦截 copy，阻断版权后缀篡改，同时尽量保留富文本剪贴板数据
+        window.addEventListener('copy', function (e) {
+            if (isPureUiElement(e.target)) return;
+            const active = e.target;
+            if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+                return;
+            }
+
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
             const text = selection.toString();
             if (!text || text.length === 0) return;
 
-            // 清洗常见的版权声明小尾巴
-            let cleanText = text
+            // 阻断网站自身的 copy 劫持监听（如知乎/CSDN 在 document/容器节点挂载的尾注追加器）
+            e.stopImmediatePropagation();
+
+            // 清洗选区文本本身含有的版权声明小尾巴
+            const cleanText = text
                 .replace(/\n*————————————————\n*版权声明：本文为.*?\n*原文链接：.*$/gis, '')
                 .replace(/\n*著作权归作者所有.*$/gis, '')
                 .replace(/\n*作者：.*?\n*链接：.*?\n*来源：知乎.*$/gis, '')
@@ -685,14 +736,15 @@
                 .replace(/\n*来源：简书.*$/gis, '')
                 .replace(/\n*本作品采用.*许可协议.*$/gis, '');
 
-            if (e.clipboardData) {
-                e.clipboardData.setData('text/plain', cleanText);
-                e.preventDefault();
-                e.stopImmediatePropagation();
-            } else if (typeof GM_setClipboard !== 'undefined') {
-                GM_setClipboard(cleanText, 'text');
-                e.preventDefault();
-                e.stopImmediatePropagation();
+            // 仅在选区内容确实被净化改写时才接管 text/plain；否则放行浏览器原生富文本复制
+            if (cleanText !== text) {
+                if (e.clipboardData) {
+                    e.clipboardData.setData('text/plain', cleanText);
+                    e.preventDefault();
+                } else if (typeof GM_setClipboard !== 'undefined') {
+                    GM_setClipboard(cleanText, 'text');
+                    e.preventDefault();
+                }
             }
         }, true);
 
@@ -728,32 +780,48 @@
             if (!href) return null;
             try {
                 const url = new URL(href, window.location.href);
+                let raw = null;
 
-                // 知乎: link.zhihu.com/?target=...
-                if (url.hostname === 'link.zhihu.com' && url.searchParams.has('target')) {
-                    return decodeURIComponent(url.searchParams.get('target'));
+                // 知乎 / CSDN / 掘金: link.* /?target=...  |  简书: links.jianshu.com/go?to=...
+                if (
+                    (url.hostname === 'link.zhihu.com' ||
+                     url.hostname === 'link.csdn.net' ||
+                     url.hostname === 'link.juejin.cn') &&
+                    url.searchParams.has('target')
+                ) {
+                    raw = url.searchParams.get('target');
+                } else if (
+                    url.hostname.includes('jianshu.com') &&
+                    url.pathname.includes('/go') &&
+                    url.searchParams.has('to')
+                ) {
+                    raw = url.searchParams.get('to');
                 }
-                // CSDN: link.csdn.net/?target=...
-                if (url.hostname === 'link.csdn.net' && url.searchParams.has('target')) {
-                    return decodeURIComponent(url.searchParams.get('target'));
-                }
-                // 掘金: link.juejin.cn/?target=...
-                if (url.hostname === 'link.juejin.cn' && url.searchParams.has('target')) {
-                    return decodeURIComponent(url.searchParams.get('target'));
-                }
-                // 简书: links.jianshu.com/go?to=...
-                if (url.hostname.includes('jianshu.com') && url.pathname.includes('/go') && url.searchParams.has('to')) {
-                    return decodeURIComponent(url.searchParams.get('to'));
-                }
+
+                if (!raw) return null;
+                // URLSearchParams.get 已完成一次解码；仅在上游存在二次编码时再解一次，避免破坏 %25/%26 参数
+                const candidate = /^https?%3A/i.test(raw) ? decodeURIComponent(raw) : raw;
+                const parsed = new URL(candidate);
+                return (parsed.protocol === 'http:' || parsed.protocol === 'https:') ? parsed.href : null;
             } catch (e) {
                 return null;
             }
-            return null;
+        }
+
+        function rewriteAnchor(anchor) {
+            if (!anchor || anchor.dataset.pureDirect === 'true') return null;
+            const realUrl = resolveRealUrl(anchor.href);
+            if (realUrl) {
+                anchor.href = realUrl;
+                anchor.setAttribute('rel', 'noopener noreferrer');
+                anchor.dataset.pureDirect = 'true';
+            }
+            return realUrl;
         }
 
         // 1. 捕获阶段点击事件代理
         document.addEventListener('click', function (e) {
-            const anchor = e.target.closest('a');
+            const anchor = e.target.closest?.('a');
             if (!anchor) return;
             const realUrl = resolveRealUrl(anchor.href);
             if (realUrl) {
@@ -763,16 +831,17 @@
             }
         }, true);
 
-        // 2. 静态链接直接覆写 href
+        // 2. 鼠标悬停/聚焦时惰性改写动态注入的跳转链接
+        const onLazyRewrite = (e) => {
+            const anchor = e.target.closest?.('a');
+            if (anchor) rewriteAnchor(anchor);
+        };
+        document.addEventListener('mouseover', onLazyRewrite, true);
+        document.addEventListener('focusin', onLazyRewrite, true);
+
+        // 3. 静态链接直接覆写 href
         function rewriteExistingLinks() {
-            const links = document.querySelectorAll('a[href*="target="], a[href*="to="]');
-            links.forEach(a => {
-                const real = resolveRealUrl(a.href);
-                if (real) {
-                    a.href = real;
-                    a.setAttribute('rel', 'noopener noreferrer');
-                }
-            });
+            document.querySelectorAll('a[href*="target="], a[href*="to="]').forEach(rewriteAnchor);
         }
 
         if (document.readyState === 'loading') {
@@ -797,10 +866,38 @@
         };
     }
 
+    function observeNonPureMutations(callback, wait = 250) {
+        const debounced = debounce(callback, wait);
+        try {
+            const observer = new MutationObserver((mutations) => {
+                for (const m of mutations) {
+                    if (!isPureUiElement(m.target)) {
+                        debounced();
+                        return;
+                    }
+                }
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+            return observer;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function hideIfVisible(el) {
+        if (el && el.style.display !== 'none') {
+            el.style.display = 'none';
+        }
+    }
+
     function setupPlatformFixes() {
+        if (isAuthPage() || window.__purePlatformFixed) return;
+        window.__purePlatformFixed = true;
+
         // --- CSDN 修复 ---
         if (isCSDN) {
             function cleanCSDN() {
+                if (isAuthPage()) return;
                 // 自动展开全文：直接移除阅读更多按钮与折叠遮罩，严禁调用 .click() 避免触发 CSDN 强制登录拦截
                 const readMoreBtns = document.querySelectorAll('.btn-readmore, #btn-readmore, .btn_readmore, #getVipUrl, .openvippay');
                 readMoreBtns.forEach(btn => btn.remove());
@@ -830,8 +927,10 @@
                     .code-annotation
                 `).forEach(el => el.remove());
 
-                // 代码块免登录一键复制与展开
-                document.querySelectorAll('pre').forEach(pre => {
+                // 代码块免登录一键复制与展开（仅处理尚未标记的 pre，避免全量回流）
+                document.querySelectorAll('pre:not([data-pure-processed="true"])').forEach(pre => {
+                    pre.dataset.pureProcessed = 'true';
+
                     // 自动展开折叠代码块
                     if (pre.classList.contains('set-code-hide') || pre.classList.contains('set-code-height')) {
                         pre.classList.remove('set-code-hide', 'set-code-height');
@@ -842,10 +941,10 @@
                     const lookMore = pre.querySelector('.hide-pre-bar, .look-more-pre');
                     if (lookMore) lookMore.remove();
 
-                    // 清理代码块顶栏/底栏中的营销文本与按钮（如“用码道免费领 1 个月 Token”）
-                    pre.querySelectorAll('.opt-box > *:not(.hljs-button), .box-highline > *:not(.hljs-button), button:not(.hljs-button), a, span').forEach(node => {
+                    // 清理代码块工具栏中的营销按钮/文案（跳过 code 内部高亮 span）
+                    pre.querySelectorAll('.opt-box > *:not(.hljs-button), .box-highline > *:not(.hljs-button), pre > button:not(.hljs-button), .opt-box a').forEach(node => {
                         if (node.classList.contains('hljs-button')) return;
-                        const txt = (node.innerText || node.textContent || '').trim();
+                        const txt = (node.textContent || '').trim();
                         if (txt && /用码道|免费领.*Token|AI写代码|获取完整项目代码|AI生成项目|AI编程工具|Lobster/i.test(txt)) {
                             node.remove();
                         }
@@ -892,22 +991,17 @@
 
             document.addEventListener('DOMContentLoaded', cleanCSDN);
             window.addEventListener('load', cleanCSDN);
-            // 兜底轮询:页面不可见时跳过,降低后台标签页的 CPU 占用
+            // 兜底轮询:仅在存在未处理 pre 或遮罩且页面可见时轻扫一次
             setInterval(() => {
-                if (!document.hidden) cleanCSDN();
-            }, 1500);
+                if (!document.hidden && !isAuthPage()) cleanCSDN();
+            }, 2500);
 
-            // 监听 DOM 变化实现快速清理,变更高频时合并执行
-            try {
-                const debouncedCleanCSDN = debounce(cleanCSDN, 200);
-                const csdnObserver = new MutationObserver(debouncedCleanCSDN);
-                csdnObserver.observe(document.documentElement, { childList: true, subtree: true });
-            } catch (e) { /* ignore */ }
+            observeNonPureMutations(cleanCSDN, 250);
 
             // 拦截文章阅读区域内诱导或强制跳转 passport.csdn.net 登录页的链接点击
             if (config.blockLoginModal) {
                 document.addEventListener('click', function (e) {
-                    const a = e.target.closest('a');
+                    const a = e.target.closest?.('a');
                     if (a && a.href && a.href.includes('passport.csdn.net')) {
                         // 允许用户在顶部工具栏中主动点击登录
                         if (a.closest('#csdn-toolbar, .csdn-toolbar')) return;
@@ -922,21 +1016,37 @@
         // --- 知乎 修复 ---
         if (isZhihu) {
             function cleanZhihu() {
-                // 拦截并摧毁登录弹窗与锁屏
+                if (isAuthPage()) return;
+                // 拦截并隐藏登录弹窗与锁屏
                 if (config.blockLoginModal) {
                     // 仅隐藏而非移除:知乎为 React 应用,外部移除其受管节点可能引发渲染异常
-                    const modals = document.querySelectorAll('.Modal-wrapper, .sign-flow-modal, .SignFlowModal');
-                    modals.forEach(m => { m.style.display = 'none'; });
+                    document.querySelectorAll('.Modal-wrapper, .sign-flow-modal, .SignFlowModal, .css-woosw9, .KanshanCornerButton, .CornerButtons--kanshan')
+                        .forEach(hideIfVisible);
+                    // 兜底识别滚动后挂载的右下角固定登录催促卡（防止哈希类名轮换）
+                    document.querySelectorAll('body > div').forEach(el => {
+                        if (isPureUiElement(el) || el.style.display === 'none') return;
+                        const txt = el.textContent || '';
+                        if (txt.includes('登录即可查看') && txt.includes('立即登录/注册') && txt.length < 300) {
+                            const cs = getComputedStyle(el);
+                            if (cs.position === 'fixed') {
+                                el.style.display = 'none';
+                            }
+                        }
+                    });
                     document.documentElement.classList.remove('Modal-open');
                     document.body.classList.remove('Modal-open');
-                    document.documentElement.style.overflow = 'auto';
-                    document.body.style.overflow = 'auto';
+                    if (document.documentElement.style.overflow !== 'auto') {
+                        document.documentElement.style.overflow = 'auto';
+                    }
+                    if (document.body && document.body.style.overflow !== 'auto') {
+                        document.body.style.overflow = 'auto';
+                    }
                 }
 
                 // 隐藏侧栏以腾出宽屏排版空间 (同上,不物理移除受管节点)
                 if (config.zhihu_hideSideBar || config.wideArticleLayout) {
                     document.querySelectorAll('.Question-sideColumn, .GlobalWrite-nav, .QuestionPage-sideColumn')
-                        .forEach(el => { el.style.display = 'none'; });
+                        .forEach(hideIfVisible);
                 }
 
                 // 自动展开折叠回答
@@ -953,54 +1063,45 @@
 
             document.addEventListener('DOMContentLoaded', cleanZhihu);
             window.addEventListener('load', cleanZhihu);
-            // 滚动时知乎可能会异步挂载弹窗，使用 MutationObserver（高频变更合并执行）
-            try {
-                const debouncedCleanZhihu = debounce(cleanZhihu, 200);
-                const observer = new MutationObserver(debouncedCleanZhihu);
-                observer.observe(document.documentElement, { childList: true, subtree: true });
-            } catch (e) { /* ignore */ }
+            observeNonPureMutations(cleanZhihu, 250);
         }
 
         // --- 掘金 修复 ---
         if (isJuejin) {
             function cleanJuejin() {
+                if (isAuthPage()) return;
                 // 掘金为 Vue 应用,受管节点仅隐藏不移除,避免外部删除引发渲染异常
                 if (config.hideTopNav) {
-                    const h = document.querySelector('header.main-header, .main-header-box, .header-container, header.juejin-header');
-                    if (h) h.style.display = 'none';
+                    hideIfVisible(document.querySelector('header.main-header, .main-header-box, .header-container, header.juejin-header'));
                     const viewContainer = document.querySelector('.view-container');
                     if (viewContainer) {
-                        viewContainer.style.paddingTop = '0px';
-                        viewContainer.style.marginTop = '0px';
+                        if (viewContainer.style.paddingTop !== '0px') viewContainer.style.paddingTop = '0px';
+                        if (viewContainer.style.marginTop !== '0px') viewContainer.style.marginTop = '0px';
                     }
                 }
                 if (config.removeAds || config.juejin_pureLayout || config.wideArticleLayout) {
-                    const suspension = document.querySelector('.suspension-panel');
-                    if (suspension) suspension.style.display = 'none';
-                    const sb = document.querySelector('.sidebar');
-                    if (sb) sb.style.display = 'none';
+                    hideIfVisible(document.querySelector('.suspension-panel'));
+                    hideIfVisible(document.querySelector('.sidebar'));
                 }
             }
             document.addEventListener('DOMContentLoaded', cleanJuejin);
             window.addEventListener('load', cleanJuejin);
-            try {
-                const debouncedCleanJuejin = debounce(cleanJuejin, 200);
-                const juejinObserver = new MutationObserver(debouncedCleanJuejin);
-                juejinObserver.observe(document.documentElement, { childList: true, subtree: true });
-            } catch (e) { /* ignore */ }
+            observeNonPureMutations(cleanJuejin, 300);
         }
 
         // --- 简书 修复 ---
         if (isJianshu) {
             function cleanJianshu() {
+                if (isAuthPage()) return;
                 // 简书为 React 应用,受管节点仅隐藏不移除
                 if (config.hideTopNav) {
-                    const nav = document.querySelector('header, nav.navbar, nav._213wzc, nav.navbar-fixed-top');
-                    if (nav) nav.style.display = 'none';
-                    if (document.body) document.body.style.paddingTop = '0px';
+                    hideIfVisible(document.querySelector('header, nav.navbar, nav._213wzc, nav.navbar-fixed-top'));
+                    if (document.body && document.body.style.paddingTop !== '0px') {
+                        document.body.style.paddingTop = '0px';
+                    }
                 }
                 if (config.removeAds || config.jianshu_removeAppPrompt || config.wideArticleLayout) {
-                    document.querySelectorAll('aside').forEach(el => { el.style.display = 'none'; });
+                    document.querySelectorAll('aside, ._3Pnjry').forEach(hideIfVisible);
                 }
                 if (config.autoExpandContent) {
                     document.querySelectorAll('.collapse-free-content .read-more, .collapse-free-content button').forEach(btn => {
@@ -1018,11 +1119,7 @@
                 cleanJianshu();
             }
             window.addEventListener('load', cleanJianshu);
-            try {
-                const debouncedCleanJianshu = debounce(cleanJianshu, 200);
-                const jianshuObserver = new MutationObserver(debouncedCleanJianshu);
-                jianshuObserver.observe(document.documentElement, { childList: true, subtree: true });
-            } catch (e) { /* ignore */ }
+            observeNonPureMutations(cleanJianshu, 250);
         }
 
         // --- 博客园 修复 ---
@@ -1084,46 +1181,51 @@
     // ==========================================
     //  9. 正文提取与元数据解析器
     // ==========================================
+    function findArticleElement(selectors) {
+        for (const sel of selectors) {
+            const matches = document.querySelectorAll(sel);
+            for (const el of matches) {
+                if (!el.closest('#pure-zen-overlay, #pure-dock, #pure-toc-panel, #pure-modal-mask')) {
+                    return el;
+                }
+            }
+        }
+        return null;
+    }
+
     function extractArticleData() {
         let title = document.title || 'Untitled Article';
         let contentEl = null;
 
         if (isCSDN) {
             title = document.querySelector('#articleContentId')?.innerText || document.title;
-            contentEl = document.querySelector('#article_content');
+            contentEl = findArticleElement(['#article_content']);
         } else if (isZhihu) {
             // 知乎专栏或问答
             title = document.querySelector('.Post-Title')?.innerText ||
                     document.querySelector('.QuestionHeader-title')?.innerText ||
                     document.title;
-            contentEl = document.querySelector('.Post-RichTextContainer') ||
-                        document.querySelector('.RichContent-inner') ||
-                        document.querySelector('.QuestionAnswer-content');
+            contentEl = findArticleElement(['.Post-RichTextContainer', '.RichContent-inner', '.QuestionAnswer-content']);
         } else if (isJuejin) {
             title = document.querySelector('.article-title')?.innerText || document.title;
-            contentEl = document.querySelector('.article-viewer.markdown-body') ||
-                        document.querySelector('.markdown-body') ||
-                        document.querySelector('.article-viewer') ||
-                        document.querySelector('article .main') ||
-                        document.querySelector('.article-content') ||
-                        document.querySelector('.main-area article');
+            contentEl = findArticleElement([
+                '.article-viewer.markdown-body', '.markdown-body', '.article-viewer',
+                'article .main', '.article-content', '.main-area article'
+            ]);
         } else if (isJianshu) {
             title = document.querySelector('h1')?.innerText || document.title;
-            contentEl = document.querySelector('article') || document.querySelector('._2rhmJa');
+            contentEl = findArticleElement(['article._2rhmJa', 'article', '._2rhmJa']);
         } else if (isCnblogs) {
             title = document.querySelector('#cb_post_title_url')?.innerText || document.title;
-            contentEl = document.querySelector('#cnblogs_post_body');
+            contentEl = findArticleElement(['#cnblogs_post_body']);
         } else if (isWeixin) {
             title = document.querySelector('#activity-name')?.innerText || document.title;
-            contentEl = document.querySelector('#js_content');
+            contentEl = findArticleElement(['#js_content']);
         }
 
         // 通用降级查找
         if (!contentEl) {
-            contentEl = document.querySelector('article') ||
-                        document.querySelector('main') ||
-                        document.querySelector('.article') ||
-                        document.querySelector('.post-content');
+            contentEl = findArticleElement(['article', 'main', '.article', '.post-content']);
         }
 
         // 仅剥离已知的平台来源后缀,避免误伤标题中原本就含连字符/下划线的内容
@@ -1139,15 +1241,42 @@
             this.container = null;
             this.headings = [];
             this.isOpen = false;
+            this.scrollBound = false;
+        }
+
+        clearPanel() {
+            document.querySelectorAll('#pure-toc-panel').forEach(el => el.remove());
+            this.container = null;
+            this.headings = [];
+        }
+
+        syncDockState() {
+            const tocBtn = document.getElementById('pure-dock-toc');
+            if (tocBtn) {
+                tocBtn.classList.toggle('pure-dock-active', this.isOpen && !!this.container);
+            }
         }
 
         init() {
-            if (!config.enableFloatingTOC) return;
+            if (!config.enableFloatingTOC || isAuthPage()) {
+                this.clearPanel();
+                this.syncDockState();
+                return false;
+            }
             const { contentEl } = extractArticleData();
-            if (!contentEl) return;
+            if (!contentEl) {
+                this.clearPanel();
+                this.syncDockState();
+                return false;
+            }
 
             const elements = contentEl.querySelectorAll('h1, h2, h3, h4');
-            if (elements.length < 2) return; // 标题过少不生成目录
+            if (elements.length < 2) {
+                this.clearPanel();
+                this.isOpen = false;
+                this.syncDockState();
+                return false; // 标题过少不生成目录
+            }
 
             this.headings = Array.from(elements).map((el, index) => {
                 const id = el.id || `pure-toc-h-${index}`;
@@ -1155,13 +1284,24 @@
                 return {
                     id,
                     level: parseInt(el.tagName.substring(1), 10),
-                    text: el.innerText.trim(),
+                    text: (el.innerText || el.textContent || '').trim(),
                     el
                 };
             });
 
             this.render();
             this.bindScrollHighlight();
+            this.syncDockState();
+            return true;
+        }
+
+        refresh() {
+            const wasOpen = this.isOpen;
+            const ok = this.init();
+            if (ok && wasOpen && this.container) {
+                this.container.classList.add('pure-toc-show');
+            }
+            this.syncDockState();
         }
 
         render() {
@@ -1179,14 +1319,15 @@
                 </div>
                 <div class="pure-toc-list">
                     ${this.headings.map(h => `
-                        <a href="#${h.id}" class="pure-toc-item pure-toc-l${h.level}" data-id="${h.id}">
-                            ${h.text}
+                        <a href="#${escapeHtml(h.id)}" class="pure-toc-item pure-toc-l${h.level}" data-id="${escapeHtml(h.id)}">
+                            ${escapeHtml(h.text)}
                         </a>
                     `).join('')}
                 </div>
             `;
 
             document.body.appendChild(this.container);
+            this.container.classList.toggle('pure-toc-show', this.isOpen);
 
             this.container.querySelector('.pure-toc-close').addEventListener('click', () => {
                 this.toggle(false);
@@ -1196,7 +1337,7 @@
                 link.addEventListener('click', (e) => {
                     e.preventDefault();
                     const id = link.getAttribute('data-id');
-                    const targetEl = document.getElementById(id);
+                    const targetEl = id ? document.getElementById(id) : null;
                     if (targetEl) {
                         targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }
@@ -1205,6 +1346,8 @@
         }
 
         bindScrollHighlight() {
+            if (this.scrollBound) return;
+            this.scrollBound = true;
             let ticking = false;
             window.addEventListener('scroll', () => {
                 if (!ticking) {
@@ -1214,11 +1357,11 @@
                     });
                     ticking = true;
                 }
-            });
+            }, { passive: true });
         }
 
         updateActiveItem() {
-            if (!this.container) return;
+            if (!this.container || !this.isOpen) return;
             let current = null;
 
             // 用视口相对位置判定:标题位于定位祖先内时 offsetTop 并非文档偏移,会算错高亮
@@ -1236,20 +1379,35 @@
             });
 
             if (current) {
-                const activeA = this.container.querySelector(`.pure-toc-item[data-id="${current.id}"]`);
-                if (activeA) {
-                    activeA.classList.add('pure-active');
-                    activeA.scrollIntoView({ block: 'nearest' });
+                const items = this.container.querySelectorAll('.pure-toc-item');
+                for (const activeA of items) {
+                    if (activeA.getAttribute('data-id') === current.id) {
+                        activeA.classList.add('pure-active');
+                        activeA.scrollIntoView({ block: 'nearest' });
+                        break;
+                    }
                 }
             }
         }
 
         toggle(forceState) {
-            this.isOpen = forceState !== undefined ? forceState : !this.isOpen;
-            if (!this.container) this.init();
+            if (isAuthPage()) return;
+            const nextOpen = forceState !== undefined ? forceState : !this.isOpen;
+            if (nextOpen && !this.container) {
+                const ok = this.init();
+                if (!ok) {
+                    this.isOpen = false;
+                    this.syncDockState();
+                    showToast('当前文章暂无多级大纲目录');
+                    return;
+                }
+            }
+            this.isOpen = nextOpen;
             if (this.container) {
                 this.container.classList.toggle('pure-toc-show', this.isOpen);
+                if (this.isOpen) this.updateActiveItem();
             }
+            this.syncDockState();
         }
     }
 
@@ -1297,11 +1455,14 @@
         close() {
             if (!this.overlay) return;
             this.overlay.classList.remove('pure-zen-active');
+            const bodyEl = this.overlay.querySelector('.pure-zen-content');
+            if (bodyEl) bodyEl.innerHTML = '';
             document.documentElement.style.overflow = '';
             this.isActive = false;
         }
 
         toggle() {
+            if (isAuthPage()) return;
             if (this.isActive) {
                 this.close();
             } else {
@@ -1310,25 +1471,48 @@
         }
 
         sanitizeContent(root) {
-            // 剔除所有脚本、无用按钮、广告、外链推荐或宿主元数据
+            // 剔除所有脚本、无用按钮、广告、代码头装饰与宿主元数据
             const junkSelectors = [
                 'script', 'style', 'iframe', '.hide-article-box', '.btn-readmore',
                 '.hljs-button', '.reward-area', '.recommend-box', '.comment-box',
-                '.like-btn', '.share-box', '.advert', '[class*="ad-"]',
+                '.like-btn', '.share-box', '.advert',
+                '[class^="ad-"]', '[class*=" ad-"]', '[class*="-ad-"]', '[class$="-ad"]',
                 '.article-title', '.author-info-block', '.article-banner', '.extension-banner',
-                '.tag-list-box', '.suspension-panel'
+                '.tag-list-box', '.suspension-panel', '.image-container-fill',
+                '.code-block-extension-header', '.pre-numbering', '.line-numbers-rows'
             ];
             root.querySelectorAll(junkSelectors.join(',')).forEach(el => el.remove());
 
-            // 还原图片懒加载 src
+            // 清除简书等平台占位容器的绝对定位与高度限制，避免移除 .image-container-fill 后图片被 0px 容器裁切
+            root.querySelectorAll('.image-package, .image-container, .image-view, .image-view-maintain').forEach(wrap => {
+                wrap.style.position = 'static';
+                wrap.style.width = 'auto';
+                wrap.style.height = 'auto';
+                wrap.style.maxWidth = '100%';
+                wrap.style.maxHeight = 'none';
+                wrap.style.paddingBottom = wrap.classList.contains('image-package') ? '12px' : '0';
+                wrap.style.overflow = 'visible';
+                wrap.style.backgroundColor = 'transparent';
+            });
+
             root.querySelectorAll('img').forEach(img => {
-                const realSrc = img.getAttribute('data-src') ||
-                                img.getAttribute('data-original') ||
-                                img.getAttribute('data-actualsrc') ||
-                                img.getAttribute('origin-src');
-                if (realSrc) img.src = realSrc;
+                const rawSrc = img.getAttribute('data-original-src') ||
+                               img.getAttribute('data-src') ||
+                               img.getAttribute('data-original') ||
+                               img.getAttribute('data-actualsrc') ||
+                               img.getAttribute('data-lazy-src') ||
+                               img.getAttribute('origin-src') ||
+                               img.getAttribute('src');
+                const realSrc = normalizeMediaUrl(rawSrc);
+                if (realSrc) {
+                    img.setAttribute('src', realSrc);
+                }
+                img.classList.remove('image-loading', 'lazyload', 'lazy');
                 img.style.maxWidth = '100%';
                 img.style.height = 'auto';
+                img.style.visibility = 'visible';
+                img.style.opacity = '1';
+                img.style.filter = 'none';
             });
         }
 
@@ -1468,6 +1652,54 @@
         },
 
         htmlToMarkdown(node) {
+            function extractPreText(preEl) {
+                const preClone = preEl.cloneNode(true);
+                const langHint = preClone.querySelector('.code-block-extension-codeLanguage')?.textContent?.trim() || '';
+                preClone.querySelectorAll(
+                    '.code-block-extension-header, .pre-numbering, .hljs-button, .opt-box, .box-highline, .line-numbers-rows, button'
+                ).forEach(n => n.remove());
+
+                const codeEl = preClone.querySelector('code');
+                const lang = (
+                    codeEl?.getAttribute('lang') ||
+                    (codeEl?.className?.match(/(?:language|lang)-([\w+-]+)/) || [])[1] ||
+                    (preClone.className?.match(/(?:language|lang)-([\w+-]+)/) || [])[1] ||
+                    langHint
+                ).trim();
+
+                const target = codeEl || preClone;
+                target.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+                // 某些编辑器用 div/p 包裹单行代码，在离屏克隆节点中需显式保留行尾换行
+                target.querySelectorAll('div, p').forEach(lineEl => {
+                    if (!lineEl.textContent.endsWith('\n')) {
+                        lineEl.append('\n');
+                    }
+                });
+                const text = (target.textContent || '').replace(/\r\n/g, '\n').replace(/\n+$/, '').replace(/^\n+/, '');
+                return `\n\n\`\`\`${lang}\n${text}\n\`\`\`\n\n`;
+            }
+
+            function renderTable(tableEl, depth) {
+                const rows = Array.from(tableEl.querySelectorAll('tr'));
+                if (rows.length === 0) return '';
+                const matrix = rows.map(tr =>
+                    Array.from(tr.children)
+                        .filter(cell => cell.tagName === 'TH' || cell.tagName === 'TD')
+                        .map(cell => Array.from(cell.childNodes).map(n => walk(n, depth)).join('').replace(/\s+/g, ' ').replace(/\|/g, '\\|').trim())
+                ).filter(row => row.length > 0);
+                if (matrix.length === 0) return '';
+                const colCount = Math.max(...matrix.map(r => r.length));
+                const padRow = (r) => {
+                    const out = r.slice();
+                    while (out.length < colCount) out.push('');
+                    return `| ${out.join(' | ')} |`;
+                };
+                const header = padRow(matrix[0]);
+                const separator = `| ${Array(colCount).fill('---').join(' | ')} |`;
+                const body = matrix.slice(1).map(padRow);
+                return `\n\n${[header, separator, ...body].join('\n')}\n\n`;
+            }
+
             // 递归转换常用 HTML 标签至 Markdown;depth 用于嵌套列表缩进
             function walk(el, depth) {
                 depth = depth || 0;
@@ -1482,29 +1714,34 @@
 
                 // 忽略不可见或无用节点
                 if (['script', 'style', 'noscript', 'button'].includes(tag)) return '';
+                if (el.classList?.contains('code-block-extension-header')) return '';
 
                 // 处理代码块
                 if (tag === 'pre') {
-                    const code = el.querySelector('code');
-                    const lang = (code && (code.className.match(/language-(\w+)/) || code.className.match(/lang-(\w+)/)))?.[1] || '';
-                    const text = (code ? code.innerText : el.innerText).trim();
-                    return `\n\n\`\`\`${lang}\n${text}\n\`\`\`\n\n`;
+                    return extractPreText(el);
                 }
-                if (tag === 'code' && el.parentNode.tagName.toLowerCase() !== 'pre') {
-                    return ` \`${el.innerText.trim()}\` `;
+                if (tag === 'code' && el.parentNode?.tagName?.toLowerCase() !== 'pre') {
+                    return ` \`${(el.textContent || '').trim()}\` `;
                 }
+
+                // 处理分隔线、换行与表格
+                if (tag === 'hr') return '\n\n---\n\n';
+                if (tag === 'br') return '\n';
+                if (tag === 'table') return renderTable(el, depth);
 
                 // 处理标题
                 if (/^h[1-6]$/.test(tag)) {
                     const level = parseInt(tag[1], 10);
                     const prefix = '#'.repeat(level);
-                    return `\n\n${prefix} ${el.innerText.trim()}\n\n`;
+                    return `\n\n${prefix} ${(el.innerText || el.textContent || '').trim()}\n\n`;
                 }
 
                 // 处理排版标签
                 if (tag === 'p') {
-                    let childrenText = Array.from(el.childNodes).map(n => walk(n, depth)).join('');
-                    return `\n\n${childrenText.trim()}\n\n`;
+                    const childrenText = Array.from(el.childNodes).map(n => walk(n, depth)).join('').trim();
+                    if (!childrenText) return '';
+                    // 列表项内嵌套的 p 不额外插入双空行，防止打断列表连续性
+                    return el.closest('li') ? `${childrenText}\n` : `\n\n${childrenText}\n\n`;
                 }
                 if (tag === 'strong' || tag === 'b') {
                     return `**${Array.from(el.childNodes).map(n => walk(n, depth)).join('').trim()}**`;
@@ -1527,8 +1764,15 @@
                     return href ? `[${text}](${href})` : text;
                 }
                 if (tag === 'img') {
-                    const src = el.getAttribute('data-src') || el.getAttribute('data-original') || el.src;
-                    const alt = el.getAttribute('alt') || 'image';
+                    const rawSrc = el.getAttribute('data-original-src') ||
+                                   el.getAttribute('data-src') ||
+                                   el.getAttribute('data-actualsrc') ||
+                                   el.getAttribute('data-lazy-src') ||
+                                   el.getAttribute('data-original') ||
+                                   el.getAttribute('origin-src') ||
+                                   el.getAttribute('src');
+                    const src = normalizeMediaUrl(rawSrc);
+                    const alt = (el.getAttribute('alt') || 'image').trim();
                     return src ? `\n\n![${alt}](${src})\n\n` : '';
                 }
 
@@ -1550,12 +1794,12 @@
                 return Array.from(el.childNodes).map(n => walk(n, depth)).join('');
             }
 
-            // 整形时保留行首缩进(嵌套列表依赖它),仅去除行尾空白
+            // 先去除每行行尾空白，再折叠多余空行，避免纯空白字符行阻碍 \n{3,} 合并
             return walk(node)
-                .replace(/\n{3,}/g, '\n\n')
                 .split('\n')
                 .map(line => line.replace(/\s+$/, ''))
                 .join('\n')
+                .replace(/\n{3,}/g, '\n\n')
                 .trim();
         },
 
@@ -1574,16 +1818,23 @@
         constructor() {
             this.dock = null;
             this.modal = null;
+            this.initialized = false;
         }
 
         init() {
-            this.injectCSS();
-            if (config.showFloatingDock) {
+            if (isAuthPage()) return;
+            if (!this.initialized) {
+                this.initialized = true;
+                this.injectCSS();
+                this.bindGlobalKeys();
+                this.registerTampermonkeyMenu();
+            }
+            if (config.showFloatingDock && !document.getElementById('pure-dock')) {
                 this.renderDock();
             }
-            this.renderModal();
-            this.bindGlobalKeys();
-            this.registerTampermonkeyMenu();
+            if (!document.getElementById('pure-modal-mask')) {
+                this.renderModal();
+            }
         }
 
         injectCSS() {
@@ -1640,7 +1891,12 @@
                     box-shadow: ${THEME.shadow};
                     z-index: 2147483630;
                     transition: all 0.2s ease;
-                    user-select: none;
+                    -webkit-user-select: none !important;
+                    user-select: none !important;
+                }
+                #pure-dock * {
+                    -webkit-user-select: none !important;
+                    user-select: none !important;
                 }
                 #pure-dock .pure-dock-btn {
                     width: 38px !important;
@@ -1668,7 +1924,8 @@
                 #pure-dock .pure-dock-btn + .pure-dock-btn {
                     margin-left: 0 !important;
                 }
-                #pure-dock .pure-dock-btn:hover {
+                #pure-dock .pure-dock-btn:hover,
+                #pure-dock .pure-dock-btn.pure-dock-active {
                     background: ${THEME.surfaceCard};
                     color: ${THEME.primary};
                     transform: scale(1.08);
@@ -1903,8 +2160,51 @@
                     padding-bottom: 16px;
                     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
                 }
+                .pure-zen-toolbar {
+                    -webkit-user-select: none !important;
+                    user-select: none !important;
+                }
                 .pure-zen-content p {
                     margin-bottom: 1.5em;
+                }
+                .pure-zen-content a {
+                    color: ${THEME.primaryActive};
+                    text-decoration: underline;
+                    text-underline-offset: 3px;
+                }
+                .pure-zen-content blockquote {
+                    margin: 18px 0;
+                    padding: 10px 18px;
+                    border-left: 4px solid ${THEME.primary};
+                    background: rgba(204, 120, 92, 0.08);
+                    border-radius: 0 8px 8px 0;
+                }
+                .pure-zen-content code:not(pre code) {
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    background: rgba(0, 0, 0, 0.06);
+                    font-size: 0.9em;
+                    font-family: "JetBrains Mono", Consolas, Monaco, monospace;
+                }
+                .pure-zen-content hr {
+                    border: none;
+                    border-top: 1px solid rgba(0, 0, 0, 0.1);
+                    margin: 28px 0;
+                }
+                .pure-zen-content table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 20px 0;
+                    font-size: 0.92em;
+                }
+                .pure-zen-content th, .pure-zen-content td {
+                    border: 1px solid rgba(0, 0, 0, 0.12);
+                    padding: 8px 12px;
+                    text-align: left;
+                }
+                .pure-zen-content th {
+                    background: rgba(0, 0, 0, 0.04);
+                    font-weight: 600;
                 }
                 .pure-zen-content img {
                     display: block;
@@ -1924,16 +2224,50 @@
                     font-family: "JetBrains Mono", Consolas, Monaco, monospace;
                 }
 
-                /* 主题着色 */
+                /* 主题着色与宿主高对比度覆盖 */
+                #pure-zen-overlay .pure-zen-title { color: inherit; }
+                #pure-zen-overlay .pure-zen-content :is(.image-container, .image-view, .image-view-maintain) {
+                    position: static !important;
+                    width: auto !important;
+                    height: auto !important;
+                    max-height: none !important;
+                    overflow: visible !important;
+                }
                 #pure-zen-overlay[data-theme="cream"] { background: #fbf9f4; color: #2d2b28; }
                 #pure-zen-overlay[data-theme="green"] { background: #edf5ec; color: #243324; }
                 #pure-zen-overlay[data-theme="white"] { background: #ffffff; color: #1a1a1a; }
                 #pure-zen-overlay[data-theme="dark"] { background: #161615; color: #dcdad5; }
                 #pure-zen-overlay[data-theme="dark"] .pure-zen-toolbar { border-bottom-color: #262524; }
-                #pure-zen-overlay[data-theme="dark"] .pure-zen-btn { border-color: #333330; }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-btn { border-color: #333330; color: #dcdad5; }
                 #pure-zen-overlay[data-theme="dark"] .pure-zen-divider { background: #333330; }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-title,
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content :is(h1, h2, h3, h4, h5, h6, strong, b) {
+                    color: #f2f0eb !important;
+                }
                 #pure-zen-overlay[data-theme="dark"] .pure-zen-title { border-bottom-color: #262524; }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content :is(p, li, td, th, figcaption) {
+                    color: #dcdad5 !important;
+                }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content a { color: #60a5fa !important; }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content blockquote {
+                    background: #1e1e1c !important;
+                    border-left-color: #4b4a46 !important;
+                    color: #c5c2ba !important;
+                }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content :is(td, th) {
+                    border-color: #333330 !important;
+                }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content th {
+                    background: #232320 !important;
+                }
                 #pure-zen-overlay[data-theme="dark"] .pure-zen-content pre { background: #222220; color: #e6e4df; }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content code:not(pre code) { background: #2a2926; color: #f0dcd2; }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content a { color: #e2957a; }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content blockquote { background: rgba(204, 120, 92, 0.14); border-left-color: #cc785c; }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content th,
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content td { border-color: #333330; }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content th { background: #222220; }
+                #pure-zen-overlay[data-theme="dark"] .pure-zen-content hr { border-top-color: #333330; }
 
                 /* 设置模态面板 (Anthropic Warm Style) */
                 #pure-modal-mask {
@@ -2259,6 +2593,12 @@
 
         bindGlobalKeys() {
             window.addEventListener('keydown', (e) => {
+                if (isAuthPage()) return;
+                if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+                const target = e.target;
+                if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+                    return;
+                }
                 // 优先用 e.code 判定按键:macOS 按住 Option 时 e.key 会变成 '®' 等特殊字符,导致快捷键失灵
                 // Alt + R: 沉浸阅读
                 if (e.altKey && (e.code === 'KeyR' || e.key === 'r' || e.key === 'R')) {
@@ -2285,11 +2625,50 @@
     }
 
     // ==========================================
-    //  14. 入口初始化
+    //  14. 入口初始化 & SPA 路由追踪
     // ==========================================
     const ui = new SettingsUI();
+    let lastHref = window.location.href;
+    let spaTimer = null;
+
+    function handleRouteChange() {
+        if (window.location.href === lastHref) return;
+        lastHref = window.location.href;
+        clearTimeout(spaTimer);
+        spaTimer = setTimeout(() => {
+            if (zenInstance.isActive) zenInstance.close();
+            if (isAuthPage()) {
+                document.querySelectorAll('#pure-dock, #pure-toc-panel, #pure-modal-mask').forEach(el => el.remove());
+                return;
+            }
+            injectStartCSS();
+            setupPlatformFixes();
+            setupCopyGuard();
+            ui.init();
+            if (config.enableFloatingTOC) {
+                tocInstance.refresh();
+            }
+        }, 700);
+    }
+
+    function hookHistoryNavigation() {
+        if (window.__pureHistoryHooked) return;
+        window.__pureHistoryHooked = true;
+        ['pushState', 'replaceState'].forEach(method => {
+            const orig = history[method];
+            if (typeof orig !== 'function') return;
+            history[method] = function () {
+                const ret = orig.apply(this, arguments);
+                handleRouteChange();
+                return ret;
+            };
+        });
+        window.addEventListener('popstate', handleRouteChange);
+    }
 
     function onDOMLoaded() {
+        hookHistoryNavigation();
+        if (isAuthPage()) return;
         ui.init();
         if (config.enableFloatingTOC) {
             setTimeout(() => tocInstance.init(), 1000);
