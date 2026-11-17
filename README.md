@@ -21,6 +21,8 @@
 |---|:---:|---|---|:---:|:---:|
 | **[学习通AI自动答题](./automatic-AI-answer-system-for-xxt)** | `0.0.1` | `*://*.chaoxing.com/*`<br>`*://*.edu.cn/*` | • WOFF 动态字体解密<br>• 单选/多选/判断/填空/简答全题型支持<br>• 富文本 iframe / UEditor 自动回填<br>• DeepSeek & MiMo 双驱动 / 自定义端点 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js) | [使用教程](./automatic-AI-answer-system-for-xxt/README.md) |
 | **[斗鱼直播美化](./douyu-beautification)** | `0.0.1` | `*://www.douyu.com/*`<br>`*://douyu.com/*` | • `document-start` 零闪烁 CSS 注入<br>• 10 项全方位界面冗余元素净化<br>• 16:9 居中自适应大窗 / 100% 满屏<br>• 顶栏即时设置面板 & 实时热切换 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js) | [使用教程](./douyu-beautification/README.md) |
+| **[抖音直播美化](./douyin-beautification)** | `0.1.0` | `*://live.douyin.com/*`<br>`*://www.douyin.com/root/live/*`<br>`*://www.douyin.com/live/*` | • `document-start` 零闪烁净化，聊天/礼物/弹幕/活动一次清空<br>• 竖屏直播全窗口沉浸 + 氛围光效<br>• 默认静音 & 自动高清<br>• Shadow DOM 悬浮顶栏与毛玻璃设置面板 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyin-beautification/douyin-beautification.user.js) | [使用教程](./douyin-beautification/README.md) |
+| **[时间线净化](./social-feed-cleaner)** | `0.1.1` | `*://www.xiaohongshu.com/*`<br>`*://xiaohongshu.com/*`<br>`*://www.weibo.com/*`<br>`*://weibo.com/*` | • 小红书 / 微博双平台 `document-start` 零闪烁净化<br>• 登录弹层、热搜/推荐侧栏、顶部 Hero 与推广卡片一次清理<br>• 小红书四列瀑布流 & 微博 642px 阅读列居中<br>• 广告/推荐/直播/短视频智能过滤 + Shadow DOM 专注面板 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/social-feed-cleaner/social-feed-cleaner.user.js) | [使用教程](./social-feed-cleaner/README.md) |
 | **[纯净阅读 (PureReader)](./pure-reader)** | `0.0.1` | `*://*.csdn.net/*`<br>`*://*.zhihu.com/*`<br>`*://juejin.cn/*`<br>`*://*.jianshu.com/*`<br>`*://*.cnblogs.com/*`<br>`*://mp.weixin.qq.com/*` | • 全平台宽屏大视野排版 (突破知乎/掘金/简书/博客园/公众号多层容器约束至 980~1200px)<br>• 自动展开全文 & CSDN 强制登录跳转熔断<br>• 净化/隐藏吸顶导航栏与大头图横幅<br>• 解除复制限制与版权小尾巴清洗<br>• 外链安全中转直达跳转<br>• 智能悬浮大纲 (TOC) & 4色沉浸阅读模式<br>• 一键清洗导出 Markdown / PDF | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/pure-reader/pure-reader.user.js) | [使用教程](./pure-reader/README.md) |
 
 
@@ -51,6 +53,22 @@ flowchart TB
                 DY_UI["导航栏原生集成设置面板"]
             end
 
+            subgraph Douyin_Module["抖音直播纯净美化引擎 (document-start)"]
+                DYIN_CSS["首屏净化样式与氛围光效 (GM_addStyle)"]
+                DYIN_DOM["Webcast 覆盖层精准隐藏"]
+                DYIN_Player["静音 / 画质自动化控制器"]
+                DYIN_UI["Shadow DOM 悬浮顶栏与设置面板"]
+                DYIN_MO["MutationObserver 守护 (不删除 React 节点)"]
+            end
+
+            subgraph Social_Module["小红书 / 微博时间线净化引擎 (document-start)"]
+                SF_CSS["平台化净化样式与柔和主题 (GM_addStyle)"]
+                SF_DOM["广告 / 直播 / 视频卡片过滤器"]
+                SF_Layout["侧栏收起与时间线居中布局器"]
+                SF_UI["Shadow DOM 悬浮面板与快捷键"]
+                SF_MO["MutationObserver 节流重扫"]
+            end
+
             subgraph PureReader_Module["纯净阅读增强引擎 (document-start)"]
                 PR_CSS["零闪烁净化样式 (GM_addStyle)"]
                 PR_CP["剪贴板防劫持与复制解禁器"]
@@ -68,6 +86,8 @@ flowchart TB
         subgraph TargetPages["宿主目标 Web 应用"]
             Page_XXT["学习通作业 / 考试页面 (Iframe / UEditor)"]
             Page_Douyu["斗鱼直播间 (HTML5 Player / WebSocket 弹幕)"]
+            Page_Douyin["抖音直播间 (Webcast / Canvas 弹幕)"]
+            Page_Social["小红书 / 微博信息流 (React / Vue 虚拟列表)"]
             Page_Reader["CSDN / 知乎 / 掘金 / 简书 / 博客园 / 公众号"]
         end
 
@@ -91,6 +111,18 @@ flowchart TB
     DY_MO -->|动态节点拦截| Page_Douyu
     DY_Player -->|控制条触发| Page_Douyu
     DY_UI <--> GM_Storage
+
+    DYIN_CSS -->|首屏净化与氛围光| Page_Douyin
+    DYIN_DOM -->|覆盖层隐藏| Page_Douyin
+    DYIN_Player -->|静音与画质切换| Page_Douyin
+    DYIN_MO -->|重渲染守护| Page_Douyin
+    DYIN_UI <--> GM_Storage
+
+    SF_CSS -->|首屏净化与主题注入| Page_Social
+    SF_DOM -->|广告 / 直播 / 视频标记| Page_Social
+    SF_Layout -->|侧栏收起与居中文档流| Page_Social
+    SF_MO -->|动态卡片重扫| Page_Social
+    SF_UI <--> GM_Storage
 
     PR_CSS -->|首屏防闪烁与去广告| Page_Reader
     PR_CP -->|剪贴板净化 & 复制解禁| Page_Reader
@@ -180,6 +212,64 @@ sequenceDiagram
     Note over Script,MO: 持续运行：动态屏蔽礼物连击、抽奖特效与活动挂件
 ```
 
+### 3. 抖音直播间纯净美化生命周期
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Browser as 浏览器
+    participant Script as 抖音直播美化脚本
+    participant CSS as 样式引擎
+    participant DOM as Webcast DOM
+    participant Player as 播放器控制器
+    participant UI as Shadow DOM UI
+
+    Browser->>Script: document-start 阶段执行
+    Script->>Script: 读取配置 GM_getValue('douyinBeautifyConfig')
+    Script->>CSS: buildGlobalCSS()
+    CSS->>DOM: 注入净化与氛围光样式（拦截首屏 FOUC）
+    Browser->>DOM: DOMContentLoaded
+    Script->>DOM: 创建 #dyb-ui-host（Shadow Root）
+    UI->>DOM: 挂载悬浮顶栏与设置面板
+    Script->>Player: 设置 video.muted = true / volume = 0
+    Script->>Player: 唤醒控制条并尝试切换「高清」
+    Script->>DOM: 启动 MutationObserver 守护
+    loop 页面动态更新
+        DOM-->>Script: 新增视频 / UI 被重渲染
+        Script->>Player: 保持静音
+        Script->>DOM: 重新挂载自定义 UI（仅 CSS 隐藏页面节点）
+    end
+```
+
+### 4. 小红书 / 微博时间线净化生命周期
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Browser as 浏览器
+    participant Script as 时间线净化脚本
+    participant CSS as 平台样式引擎
+    participant DOM as 信息流 DOM
+    participant MO as MutationObserver
+    participant UI as Shadow DOM UI
+
+    Browser->>Script: document-start 阶段执行
+    Script->>Script: 按 hostname 选择 xhs / weibo 适配器
+    Script->>Script: 读取配置 GM_getValue('socialFeedCleanerConfig')
+    Script->>CSS: buildGlobalCSS()
+    CSS->>DOM: 注入平台净化与柔和纸张主题（拦截首屏 FOUC）
+    Browser->>DOM: DOMContentLoaded
+    Script->>UI: 创建 #sfb-ui-host（Shadow Root）
+    Script->>DOM: 标记广告 / 直播 / 视频卡片
+    Script->>DOM: 收起侧栏并居中 980px / 642px 内容列
+    Script->>MO: 启动 180ms 节流监听
+    loop 信息流动态加载
+        DOM-->>Script: 新卡片 / 虚拟列表重渲染
+        Script->>DOM: 重新标记过滤项，保持配置态
+    end
+    Note over Script,DOM: 只使用 display:none 与 data-* 标记，不删除 React / Vue 节点
+```
+
 ---
 
 ## 技术栈与权限清单
@@ -194,10 +284,10 @@ sequenceDiagram
 
 | API 标识 | 授权脚本 | 权限说明与设计考量 |
 |---|:---:|---|
-| `GM_addStyle` | 两者兼备 | 注入首屏样式表，支持即时动态样式热覆盖，避免因页面脚本执行延迟导致的界面闪烁 (FOUC) |
-| `GM_getValue` | 两者兼备 | 读取用户本地个性化持久配置，确保跨页面和刷新后设置不丢失 |
-| `GM_setValue` | 两者兼备 | 将用户面板中的最新修改实时写入油猴本地沙箱数据库 |
-| `GM_registerMenuCommand` | 两者兼备 | 在浏览器扩展工具栏右键菜单注册脚本交互快捷入口 |
+| `GM_addStyle` | 全脚本通用 | 注入首屏样式表，支持即时动态样式热覆盖，避免因页面脚本执行延迟导致的界面闪烁 (FOUC) |
+| `GM_getValue` | 全脚本通用 | 读取用户本地个性化持久配置，确保跨页面和刷新后设置不丢失 |
+| `GM_setValue` | 全脚本通用 | 将用户面板中的最新修改实时写入油猴本地沙箱数据库 |
+| `GM_registerMenuCommand` | 全脚本通用 | 在浏览器扩展工具栏右键菜单注册脚本交互快捷入口 |
 | `GM_xmlhttpRequest` | 学习通AI | 允许直接向 `api.deepseek.com` 与 `api.xiaomimimo.com` 发起跨域 HTTPS 请求，免除中间转发代理 |
 | `unsafeWindow` | 学习通AI | 访问并修补宿主页面全局对象（用于拦截学习通编辑器内部崩溃错误 `loadEditorAnswerd`） |
 
@@ -242,7 +332,47 @@ interface DouyuBeautifyConfig {
 }
 ```
 
-### 3. 纯净阅读增强配置模型 (`pureReaderConfig`)
+### 3. 抖音直播美化配置模型 (`douyinBeautifyConfig`)
+
+```typescript
+interface DouyinBeautifyConfig {
+    hideHeader: boolean;         // 精简顶部信息栏（主播信息/榜单/关注）
+    hideChat: boolean;           // 隐藏右侧聊天与观众列表
+    hideGiftBar: boolean;        // 隐藏底部礼物栏与礼物入口
+    hideGiftEffects: boolean;    // 隐藏礼物特效覆盖层
+    hideDanmaku: boolean;        // 隐藏滚动弹幕
+    hideActivity: boolean;       // 隐藏活动、提示与悬浮挂件
+    hideLikeEffects: boolean;    // 隐藏点赞飘心动效
+    hideWatermark: boolean;      // 隐藏播放器水印与广告标识
+    muteLive: boolean;           // 进入直播间自动静音
+    autoHighestQuality: boolean; // 自动选择未登录可用的最高画质
+    showTopbar: boolean;         // 显示自定义悬浮顶栏
+    ambientGlow: boolean;        // 竖屏黑边氛围光效
+}
+```
+
+### 4. 小红书 / 微博时间线净化配置模型 (`socialFeedCleanerConfig`)
+
+```typescript
+interface SocialFeedCleanerConfig {
+    cleanHeader: boolean;      // 顶栏视觉净化
+    hideLeftNav: boolean;      // 隐藏左侧导航
+    hideRightSidebar: boolean; // 隐藏右侧栏（微博热搜、推荐等）
+    hideHeroBanner: boolean;   // 隐藏顶部大图（微博）
+    hideLoginPrompt: boolean;  // 隐藏登录弹窗与登录浮层
+    hideFloating: boolean;     // 隐藏小红书右下悬浮工具
+    hideSponsored: boolean;    // 过滤广告、赞助与推广卡片
+    hideRecommended: boolean;  // 过滤推荐内容卡片
+    hideLiveCards: boolean;    // 隐藏直播卡片
+    hideVideoCards: boolean;   // 隐藏短视频 / 视频笔记（默认关闭）
+    centerFeed: boolean;       // 居中时间线
+    softTheme: boolean;        // 柔和纸张主题
+    zenMode: boolean;          // 专注模式
+    showFab: boolean;          // 显示右下角悬浮开关
+}
+```
+
+### 5. 纯净阅读增强配置模型 (`pureReaderConfig`)
 
 ```typescript
 interface PureReaderConfig {
@@ -280,7 +410,15 @@ tampermonkey-scripts/
 │   ├── douyu-beautification.user.js                # 脚本单文件源码（IIFE）
 │   ├── CLAUDE.md                                   # 模块专用架构规约
 │   └── README.md                                   # 选项功能清单与更新记录
-└── pure-reader/                                    # 【项目三】多平台纯净阅读与排版增强
+├── douyin-beautification/                          # 【项目三】抖音直播间纯净美化
+│   ├── douyin-beautification.user.js               # 脚本单文件源码（IIFE）
+│   ├── CLAUDE.md                                   # Webcast DOM 与开发规范
+│   └── README.md                                   # 功能清单、配置与 FAQ
+├── social-feed-cleaner/                            # 【项目四】小红书 / 微博时间线净化
+│   ├── social-feed-cleaner.user.js                 # 脚本单文件源码（IIFE）
+│   ├── CLAUDE.md                                   # 双平台 DOM 与开发规范
+│   └── README.md                                   # 功能清单、配置与 FAQ
+└── pure-reader/                                    # 【项目五】多平台纯净阅读与排版增强
     ├── pure-reader.user.js                         # 脚本单文件源码（IIFE）
     ├── CLAUDE.md                                   # 平台适配与开发规范
     └── README.md                                   # 完整使用教程与快捷键手册
@@ -309,6 +447,8 @@ tampermonkey-scripts/
 
 - 📦 **[一键安装《学习通AI自动答题》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/automatic-AI-answer-system-for-xxt/%E5%AD%A6%E4%B9%A0%E9%80%9AAI%E7%AD%94%E9%A2%98.user.js)**
 - 📦 **[一键安装《斗鱼直播美化》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js)**
+- 📦 **[一键安装《抖音直播美化》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyin-beautification/douyin-beautification.user.js)**
+- 📦 **[一键安装《时间线净化》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/social-feed-cleaner/social-feed-cleaner.user.js)**
 - 📦 **[一键安装《纯净阅读 (PureReader)》](https://github.com/e69d8e/tampermonkey-scripts/raw/main/pure-reader/pure-reader.user.js)**
 
 ---

@@ -10,6 +10,8 @@ This is a monorepo containing independent Tampermonkey userscripts. Each project
 |---|---|---|
 | `automatic-AI-answer-system-for-xxt/` | `学习通AI答题.user.js` | Automates quiz answering on Chaoxing (学习通) learning platform via DeepSeek/MiMo AI APIs |
 | `douyu-beautification/` | `douyu-beautification.user.js` | Removes clutter and applies dark theme on Douyu (斗鱼) live streaming pages |
+| `douyin-beautification/` | `douyin-beautification.user.js` | Cleans and beautifies Douyin (抖音) live rooms with a muted, immersive stage and Shadow DOM settings UI |
+| `social-feed-cleaner/` | `social-feed-cleaner.user.js` | Cleans Xiaohongshu (小红书) and Weibo (微博) feed timelines: removes login prompts, sidebars, hero banners and promoted/recommended/live/video cards, with centered feed layouts and Shadow DOM settings UI |
 | `pure-reader/` | `pure-reader.user.js` | Distraction-free reading, ad-blocking, unblock copy, TOC, and Zen mode across CSDN, Zhihu, Juejin, JianShu, Cnblogs, WeChat Articles |
 
 Each project has its own `CLAUDE.md` with detailed architecture documentation — read those before making changes.
@@ -22,10 +24,10 @@ There is no build, lint, or test infrastructure. To develop:
 2. Install/update it in Tampermonkey
 3. Navigate to the target site and verify changes
 
-Both scripts use Tampermonkey APIs: `GM_addStyle`, `GM_getValue`/`GM_setValue`, `GM_xmlhttpRequest`, `GM_registerMenuCommand`.
+All scripts use Tampermonkey APIs: `GM_addStyle`, `GM_getValue`/`GM_setValue`, `GM_xmlhttpRequest`, `GM_registerMenuCommand`.
 
 ## Cross-Project Conventions
 
-- Both scripts share the same architectural pattern: single IIFE, config via `GM_getValue`/`GM_setValue`, CSS injection via `GM_addStyle`, floating settings panel UI
-- Both use a warm color palette inspired by Anthropic's design system (see `automatic-AI-answer-system-for-xxt/DESIGN.md` for color tokens)
+- All scripts share the same architectural pattern: single IIFE, config via `GM_getValue`/`GM_setValue`, CSS injection via `GM_addStyle`, floating settings panel UI
+- Most scripts use a warm color palette inspired by Anthropic's design system (see `automatic-AI-answer-system-for-xxt/DESIGN.md` for color tokens); platform-branded projects such as `douyin-beautification` and `social-feed-cleaner` use the site's brand accent
 - Chinese is the primary language for user-facing strings and README documentation
