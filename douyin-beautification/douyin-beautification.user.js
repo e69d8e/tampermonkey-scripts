@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         抖音直播美化 - 纯净沉浸版
 // @namespace    https://github.com/e69d8e/tampermonkey-scripts
-// @version      0.1.2
-// @description  抖音直播间极简美化：隐藏聊天区、礼物栏、弹幕、活动提示等冗余元素，竖屏沉浸宽屏、氛围渐变背景、默认静音与自动最高画质，支持自定义全屏快捷键与毛玻璃设置面板即时热切换。
+// @version      0.1.4
+// @description  抖音直播间极简美化：隐藏聊天区、礼物栏、弹幕、活动提示等冗余元素，竖屏沉浸宽屏、氛围渐变背景、默认静音与自动最高画质，空格暂停/继续、D 开关弹幕，屏蔽原生 D 旋转、H 全屏与 B 弹幕开关，支持自定义快捷键及毛玻璃设置面板即时热切换。
 // @author       YH
 // @match        *://live.douyin.com/*
 // @match        *://www.douyin.com/root/live/*
@@ -24,7 +24,7 @@
 
     if (window.self !== window.top) return;
 
-    const SCRIPT_VERSION = '0.1.2';
+    const SCRIPT_VERSION = '0.1.4';
     const CONFIG_KEY = 'douyinBeautifyConfig';
     const STYLE_ID = 'dyb-global-style';
     const HOST_ID = 'dyb-ui-host';
@@ -54,6 +54,8 @@
         autoHighestQuality: true, // 自动选择可用的最高画质
         showTopbar: true,         // 显示自定义悬浮顶栏
         ambientGlow: true,        // 在竖屏黑边区域渲染氛围光
+        danmakuShortcut: 'd',     // 显示/隐藏弹幕快捷键（用户可录制修改）
+        playPauseShortcut: 'space', // 暂停/继续直播快捷键（用户可录制修改）
         fullscreenShortcut: 'f',  // 直播原生全屏快捷键（用户可录制修改）
     };
 
@@ -73,6 +75,13 @@
         { key: 'autoHighestQuality', label: '自动最高画质', desc: '优先切换最高画质' },
         { key: 'showTopbar', label: '显示悬浮顶栏', desc: '保留主播名、返回与设置入口' },
         { key: 'ambientGlow', label: '氛围光效', desc: '在竖屏黑边区域渲染柔和渐变' },
+    ];
+
+    // 可录制的快捷键；配置里存的是 shortcutFromEvent() 生成的规范化字符串。
+    const SHORTCUT_ITEMS = [
+        { key: 'danmakuShortcut', label: '弹幕开关快捷键', desc: '显示或隐藏画面弹幕' },
+        { key: 'playPauseShortcut', label: '播放/暂停快捷键', desc: '暂停或继续直播画面' },
+        { key: 'fullscreenShortcut', label: '全屏快捷键', desc: '切换直播原生全屏' },
     ];
 
     const ITEM_MAP = {};
@@ -366,24 +375,42 @@
     }
 
     // ==========================================
-    //  直播全屏快捷键
+    //  直播快捷键
     // ==========================================
+    // 这些组合由脚本或页面其他功能占用，不允许录制。
     const RESERVED_SHORTCUTS = {
-        h: '抖音原生全屏',
         y: '抖音网页全屏',
         u: '抖音小窗',
-        d: '抖音旋转画面',
         'alt+d': '设置面板',
         'alt+m': '直播静音',
         escape: '关闭面板',
         tab: '页面焦点切换',
     };
 
-    function getLivePlayer() {
+    // 抖音原生 D（旋转画面）、H（原生全屏）与 B（弹幕开关）由脚本接管，按下后不再触发页面行为。
+    const SUPPRESSED_NATIVE_CODES = { KeyD: true, KeyH: true, KeyB: true };
+
+    function getPlayerFacade() {
         const mount = document.querySelector('.douyin-player');
         const holder = mount && mount._player;
-        const player = holder && holder.proxy;
+        return (holder && holder.proxy) || null;
+    }
+
+    function getLivePlayer() {
+        const player = getPlayerFacade();
         return player && typeof player.requestFullscreen === 'function' ? player : null;
+    }
+
+    function getLiveVideo() {
+        const mount = document.querySelector('.douyin-player');
+        const inMount = mount && mount.querySelector('video');
+        if (inMount) return inMount;
+
+        const layout = document.querySelector('#PlayerLayout');
+        const inLayout = layout && layout.querySelector('video');
+        if (inLayout) return inLayout;
+
+        return document.querySelector('video');
     }
 
     function isNativeFullscreen() {
@@ -440,6 +467,64 @@
         else requestLiveFullscreen();
     }
 
+    // 直播暂停后 xgplayer 内部仍持有 state，优先走 player facade，保证原生控制条同步。
+    function toggleLivePlayback() {
+        const video = getLiveVideo();
+        const player = getPlayerFacade();
+        const paused = video ? video.paused : !!(player && player.paused);
+
+        if (paused) {
+            if (player && typeof player.play === 'function') {
+                try {
+                    const result = player.play();
+                    if (result && typeof result.catch === 'function') result.catch(function () {});
+                    showToast('已继续播放');
+                    return;
+                } catch (e) { /* fall through */ }
+            }
+            if (video) {
+                try {
+                    const result = video.play();
+                    if (result && typeof result.catch === 'function') result.catch(function () {});
+                    showToast('已继续播放');
+                    return;
+                } catch (e) { /* ignore */ }
+            }
+            showToast('未找到可播放的直播画面');
+            return;
+        }
+
+        if (player && typeof player.pause === 'function') {
+            try {
+                player.pause();
+                showToast('已暂停直播');
+                return;
+            } catch (e) { /* fall through */ }
+        }
+        if (video) {
+            try {
+                video.pause();
+                showToast('已暂停直播');
+                return;
+            } catch (e) { /* ignore */ }
+        }
+        showToast('未找到直播画面');
+    }
+
+    // 弹幕本身由页面持续渲染，这里只切换净化样式，不重建播放器。
+    function toggleDanmaku() {
+        config.hideDanmaku = !config.hideDanmaku;
+        saveConfig(config);
+        applyStyles();
+        renderUI();
+        showToast(config.hideDanmaku ? '已隐藏弹幕' : '已显示弹幕');
+    }
+
+    function isSuppressedNativeKey(event) {
+        if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return false;
+        return !!SUPPRESSED_NATIVE_CODES[event.code];
+    }
+
     function shortcutKeyFromEvent(event) {
         const code = event.code || '';
         if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
@@ -476,6 +561,20 @@
         return !!expected && shortcutFromEvent(event) === expected;
     }
 
+    // 返回可读的冲突原因；空字符串表示该快捷键可用。
+    function shortcutConflict(shortcut, selfKey) {
+        if (RESERVED_SHORTCUTS[shortcut]) {
+            return '「' + formatShortcutLabel(shortcut) + '」已被' + RESERVED_SHORTCUTS[shortcut] + '占用，请换一个';
+        }
+        const other = SHORTCUT_ITEMS.find(function (item) {
+            return item.key !== selfKey && String(config[item.key] || '').toLowerCase() === shortcut;
+        });
+        if (other) {
+            return '「' + formatShortcutLabel(shortcut) + '」已用于' + other.label + '，请换一个';
+        }
+        return '';
+    }
+
     function formatShortcutLabel(shortcut) {
         const names = {
             ctrl: 'Ctrl', alt: 'Alt', shift: 'Shift', meta: 'Meta',
@@ -504,9 +603,10 @@
     let anchorName = '抖音直播';
     let panelOpen = false;
     let activeTab = 'clean';
-    let shortcutRecording = false;
+    let shortcutRecording = ''; // 正在录制的配置键，空字符串表示未录制
     let toastMessage = '';
     let toastTimer = null;
+    let lastRenderHTML = ''; // 上一次渲染的完整 HTML，内容未变时跳过 DOM 重建
 
     function escapeHtml(value) {
         return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
@@ -736,15 +836,16 @@
         ].join('');
     }
 
-    function buildShortcutRow() {
-        const label = config.fullscreenShortcut ? formatShortcutLabel(config.fullscreenShortcut) : '未设置';
+    function buildShortcutRow(item) {
+        const recording = shortcutRecording === item.key;
+        const label = config[item.key] ? formatShortcutLabel(config[item.key]) : '未设置';
         return [
-            '<button type="button" class="dyb-row dyb-row-shortcut ' + (shortcutRecording ? 'is-recording' : '') + '" data-dyb-action="shortcut" title="点击后按下新的快捷键">',
+            '<button type="button" class="dyb-row dyb-row-shortcut ' + (recording ? 'is-recording' : '') + '" data-dyb-action="shortcut" data-dyb-key="' + item.key + '" title="点击后按下新的快捷键">',
             '  <span class="dyb-row-copy">',
-            '    <span class="dyb-row-title">全屏快捷键</span>',
-            '    <span class="dyb-row-desc">' + (shortcutRecording ? '请按下新的快捷键，Esc 取消' : '切换直播原生全屏') + '</span>',
+            '    <span class="dyb-row-title">' + item.label + '</span>',
+            '    <span class="dyb-row-desc">' + (recording ? '请按下新的快捷键，Esc 取消' : item.desc) + '</span>',
             '  </span>',
-            '  <kbd class="dyb-key">' + escapeHtml(shortcutRecording ? '按下按键…' : label) + '</kbd>',
+            '  <kbd class="dyb-key">' + escapeHtml(recording ? '按下按键…' : label) + '</kbd>',
             '</button>',
         ].join('');
     }
@@ -770,7 +871,7 @@
             '    <button type="button" class="dyb-tab ' + (activeTab === 'clean' ? 'is-active' : '') + '" data-dyb-tab="clean">界面净化</button>',
             '    <button type="button" class="dyb-tab ' + (activeTab === 'play' ? 'is-active' : '') + '" data-dyb-tab="play">播放体验</button>',
             '  </div>',
-            '  <div class="dyb-scroll">' + items.map(buildRow).join('') + (activeTab === 'play' ? buildShortcutRow() : '') + '</div>',
+            '  <div class="dyb-scroll">' + items.map(buildRow).join('') + (activeTab === 'play' ? SHORTCUT_ITEMS.map(buildShortcutRow).join('') : '') + '</div>',
             '  <footer class="dyb-panel-foot">',
             '    <button type="button" class="dyb-reset" data-dyb-action="reset">恢复默认</button>',
             '    <span class="dyb-foot-note">设置自动保存 · Alt+D 呼出</span>',
@@ -781,8 +882,6 @@
 
     function renderUI() {
         if (!shadow) return;
-        const previousScroll = shadow.querySelector('.dyb-scroll');
-        const scrollTop = previousScroll ? previousScroll.scrollTop : 0;
         const topbar = config.showTopbar ? [
             '<div class="dyb-topbar">',
             '  <button type="button" class="dyb-icon-btn" data-dyb-action="back" title="返回">',
@@ -801,9 +900,15 @@
             '</div>',
         ].join('') : '';
 
-        const toast = '<div class="dyb-toast ' + (toastMessage ? 'is-visible' : '') + '"><span class="dyb-toast-dot"></span>' + escapeHtml(toastMessage) + '</div>';
+        const toast = '<div class="dyb-toast ' + (toastMessage ? 'is-visible' : '') + '"><span class="dyb-toast-dot"></span><span class="dyb-toast-text">' + escapeHtml(toastMessage) + '</span></div>';
 
-        shadow.innerHTML = '<style>' + SHADOW_CSS + '</style><div class="dyb-layer">' + topbar + buildPanelHTML() + toast + '</div>';
+        const html = '<style>' + SHADOW_CSS + '</style><div class="dyb-layer">' + topbar + buildPanelHTML() + toast + '</div>';
+        if (html === lastRenderHTML) return;
+
+        const previousScroll = shadow.querySelector('.dyb-scroll');
+        const scrollTop = previousScroll ? previousScroll.scrollTop : 0;
+        lastRenderHTML = html;
+        shadow.innerHTML = html;
 
         const nextScroll = shadow.querySelector('.dyb-scroll');
         if (nextScroll && scrollTop) nextScroll.scrollTop = scrollTop;
@@ -818,6 +923,7 @@
             host.style.cssText = 'position:fixed!important;inset:0!important;z-index:2147483647!important;display:block!important;pointer-events:none!important;';
             shadow = host.attachShadow({ mode: 'open' });
             shadow.addEventListener('click', handleShadowClick);
+            lastRenderHTML = '';
             document.body.appendChild(host);
             renderUI();
             return;
@@ -828,13 +934,24 @@
         }
     }
 
+    // 只改提示条本身，避免每次快捷键反馈都重建整个面板。
+    function updateToast() {
+        if (!shadow) return false;
+        const toast = shadow.querySelector('.dyb-toast');
+        const text = toast && toast.querySelector('.dyb-toast-text');
+        if (!text) return false;
+        toast.classList.toggle('is-visible', !!toastMessage);
+        text.textContent = toastMessage;
+        return true;
+    }
+
     function showToast(message) {
         toastMessage = message;
-        renderUI();
+        if (!updateToast()) renderUI();
         clearTimeout(toastTimer);
         toastTimer = setTimeout(function () {
             toastMessage = '';
-            renderUI();
+            if (!updateToast()) renderUI();
         }, 2200);
     }
 
@@ -864,7 +981,7 @@
         if (!target || typeof target.closest !== 'function') return;
 
         // 点击面板任意位置都会结束上一次录制，再由下方按钮重新进入录制。
-        shortcutRecording = false;
+        shortcutRecording = '';
 
         const tab = target.closest('[data-dyb-tab]');
         if (tab) {
@@ -885,8 +1002,11 @@
             } else if (name === 'reset') {
                 resetConfig();
             } else if (name === 'shortcut') {
-                shortcutRecording = true;
-                renderUI();
+                const shortcutKey = action.getAttribute('data-dyb-key');
+                if (shortcutKey && SHORTCUT_ITEMS.some(function (item) { return item.key === shortcutKey; })) {
+                    shortcutRecording = shortcutKey;
+                    renderUI();
+                }
             } else if (name === 'back') {
                 if (history.length > 1) history.back();
                 else location.href = 'https://live.douyin.com/';
@@ -919,8 +1039,12 @@
     // ==========================================
     //  启动与动态监听
     // ==========================================
-    let observer = null;
+    let structureObserver = null;
+    let playerObserver = null;
+    let playerScope = null;
+    let observedBody = null;
     let observerTimer = null;
+    let guardTimer = null;
     let pendingNewVideo = false;
     let booted = false;
 
@@ -932,43 +1056,90 @@
         }
     }
 
-    function setupObserver() {
-        if (observer || !document.documentElement) return;
-        observer = new MutationObserver(function (mutations) {
-            const hostDetached = !!host && !host.isConnected;
-            let hasNewVideo = false;
-            let hasRoomInfo = false;
+    function getPlayerScope() {
+        return document.querySelector('#PlayerLayout')
+            || document.querySelector('.douyin-player')
+            || document.querySelector('#LeftBackgroundLayout');
+    }
 
-            mutations.forEach(function (mutation) {
-                Array.prototype.forEach.call(mutation.addedNodes, function (node) {
-                    if (!node || node.nodeType !== 1) return;
-                    if (node.tagName === 'VIDEO' || (typeof node.querySelector === 'function' && !!node.querySelector('video'))) {
-                        hasNewVideo = true;
-                    }
-                    if (node.id === 'room_info_bar' || (typeof node.querySelector === 'function' && !!node.querySelector('#room_info_bar'))) {
-                        hasRoomInfo = true;
-                    }
-                });
-            });
+    function scheduleGuard(delay) {
+        if (observerTimer) return;
+        observerTimer = setTimeout(function () {
+            observerTimer = null;
+            runGuard();
+        }, delay || 220);
+    }
 
-            // 聊天消息会让 Webcast DOM 持续变化，只在真正需要守护时调度，避免无谓开销。
-            if (!hostDetached && !hasNewVideo && !hasRoomInfo) return;
-            if (hasNewVideo) pendingNewVideo = true;
-            if (observerTimer) return;
-            observerTimer = setTimeout(function () {
-                observerTimer = null;
-                ensureUI();
-                refreshAnchorIfNeeded();
-                if (pendingNewVideo) {
-                    pendingNewVideo = false;
-                    enforceMuteOnNewVideos();
+    function runGuard() {
+        ensureUI();
+        refreshAnchorIfNeeded();
+        observePlayerScope();
+        if (pendingNewVideo) {
+            pendingNewVideo = false;
+            enforceMuteOnNewVideos();
+        }
+    }
+
+    // 播放器内部只关心新增的 video 节点，控制条、画质菜单等变动直接忽略。
+    function handlePlayerMutations(mutations) {
+        if (pendingNewVideo) return;
+        for (let i = 0; i < mutations.length; i++) {
+            const added = mutations[i].addedNodes;
+            for (let j = 0; j < added.length; j++) {
+                const node = added[j];
+                if (!node || node.nodeType !== 1) continue;
+                if (node.tagName === 'VIDEO' || (node.firstElementChild && node.querySelector('video'))) {
+                    pendingNewVideo = true;
+                    scheduleGuard(120);
+                    return;
                 }
-            }, 220);
+            }
+        }
+    }
+
+    function observePlayerScope() {
+        const scope = getPlayerScope();
+        if (scope === playerScope) return;
+
+        if (playerObserver) {
+            playerObserver.disconnect();
+            playerObserver = null;
+        }
+        playerScope = scope || null;
+        if (!scope) return;
+
+        playerObserver = new MutationObserver(handlePlayerMutations);
+        playerObserver.observe(scope, { childList: true, subtree: true });
+        if (config.muteLive) enforceMuteOnNewVideos();
+    }
+
+    function setupObserver() {
+        if (structureObserver || !document.documentElement) return;
+
+        // 只监听 html/body 的直接子节点：聊天消息、礼物动画等高频子树变化完全不进入回调。
+        structureObserver = new MutationObserver(function () {
+            scheduleGuard(200);
         });
-        observer.observe(document.documentElement, {
-            childList: true,
-            subtree: true,
-        });
+        structureObserver.observe(document.documentElement, { childList: true });
+        if (document.body) {
+            structureObserver.observe(document.body, { childList: true });
+            observedBody = document.body;
+        }
+
+        observePlayerScope();
+    }
+
+    function startGuard() {
+        if (guardTimer) return;
+        // 兜底巡检：React 换根、播放器被整体替换时重新接管监听，并刷新主播名。
+        guardTimer = setInterval(function () {
+            if (document.hidden) return;
+            if (document.body && document.body !== observedBody && structureObserver) {
+                structureObserver.observe(document.body, { childList: true });
+                observedBody = document.body;
+            }
+            runGuard();
+        }, 3000);
     }
 
     function boot() {
@@ -981,6 +1152,7 @@
         ensureUI();
         applyMutePreference();
         setupObserver();
+        startGuard();
         scheduleQualityCheck(2200);
     }
 
@@ -993,7 +1165,8 @@
         boot();
     }
 
-    document.addEventListener('keydown', function (event) {
+    // 挂在 window 捕获阶段：先于抖音页面自身的按键处理执行，避免空格等按键被重复处理。
+    window.addEventListener('keydown', function (event) {
         if (event.isComposing || event.repeat) return;
 
         if (shortcutRecording) {
@@ -1001,29 +1174,56 @@
             event.stopPropagation();
 
             if (event.key === 'Escape') {
-                shortcutRecording = false;
+                shortcutRecording = '';
                 renderUI();
                 return;
             }
 
             const shortcut = shortcutFromEvent(event);
             if (!shortcut) return;
-            if (RESERVED_SHORTCUTS[shortcut]) {
-                showToast('「' + formatShortcutLabel(shortcut) + '」已被' + RESERVED_SHORTCUTS[shortcut] + '占用，请换一个');
+            const conflict = shortcutConflict(shortcut, shortcutRecording);
+            if (conflict) {
+                showToast(conflict);
                 return;
             }
 
-            config.fullscreenShortcut = shortcut;
+            const targetKey = shortcutRecording;
+            const target = SHORTCUT_ITEMS.find(function (item) { return item.key === targetKey; });
+            config[targetKey] = shortcut;
             saveConfig(config);
-            shortcutRecording = false;
-            showToast('全屏快捷键已设为 ' + formatShortcutLabel(shortcut));
+            shortcutRecording = '';
+            renderUI();
+            showToast((target ? target.label : '快捷键') + '已设为 ' + formatShortcutLabel(shortcut));
             return;
         }
 
-        if (!isTypingTarget(event) && matchesShortcut(event, config.fullscreenShortcut)) {
+        const typing = isTypingTarget(event);
+
+        if (!typing && matchesShortcut(event, config.danmakuShortcut)) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleDanmaku();
+            return;
+        }
+
+        if (!typing && matchesShortcut(event, config.playPauseShortcut)) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleLivePlayback();
+            return;
+        }
+
+        if (!typing && matchesShortcut(event, config.fullscreenShortcut)) {
             event.preventDefault();
             event.stopPropagation();
             toggleLiveFullscreen();
+            return;
+        }
+
+        // 吞掉抖音原生的 D（旋转）/ H（全屏）/ B（弹幕开关），避免它们和脚本行为打架。
+        if (!typing && isSuppressedNativeKey(event)) {
+            event.preventDefault();
+            event.stopPropagation();
             return;
         }
 
@@ -1052,6 +1252,8 @@
             renderUI();
         });
         GM_registerMenuCommand('🔇 切换直播静音', toggleMute);
+        GM_registerMenuCommand('💬 显示 / 隐藏弹幕', toggleDanmaku);
+        GM_registerMenuCommand('⏯️ 播放 / 暂停直播', toggleLivePlayback);
         GM_registerMenuCommand('🖥️ 切换直播全屏', toggleLiveFullscreen);
         GM_registerMenuCommand('♻️ 恢复默认设置', resetConfig);
     }
