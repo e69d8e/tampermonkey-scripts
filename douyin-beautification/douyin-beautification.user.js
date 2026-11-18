@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         抖音直播美化 - 纯净沉浸版
 // @namespace    https://github.com/e69d8e/tampermonkey-scripts
-// @version      0.1.4
-// @description  抖音直播间极简美化：隐藏聊天区、礼物栏、弹幕、活动提示等冗余元素，竖屏沉浸宽屏、氛围渐变背景、默认静音与自动最高画质，空格暂停/继续、D 开关弹幕，屏蔽原生 D 旋转、H 全屏与 B 弹幕开关，支持自定义快捷键及毛玻璃设置面板即时热切换。
+// @version      0.0.5
+// @description  抖音直播间极简美化：隐藏聊天区、礼物栏、弹幕、活动提示等冗余元素，竖屏沉浸宽屏、氛围渐变背景、默认静音与自动最高画质，空格暂停/继续、D 开关弹幕并调用抖音原生弹幕开关（B）停止渲染，屏蔽原生 D 旋转、H 全屏与 B 按键，支持自定义快捷键及毛玻璃设置面板即时热切换。
 // @author       YH
 // @match        *://live.douyin.com/*
 // @match        *://www.douyin.com/root/live/*
@@ -24,7 +24,7 @@
 
     if (window.self !== window.top) return;
 
-    const SCRIPT_VERSION = '0.1.4';
+    const SCRIPT_VERSION = '0.0.5';
     const CONFIG_KEY = 'douyinBeautifyConfig';
     const STYLE_ID = 'dyb-global-style';
     const HOST_ID = 'dyb-ui-host';
@@ -64,7 +64,7 @@
         { key: 'hideChat', label: '隐藏右侧聊天区', desc: '直播画面扩展至全窗口' },
         { key: 'hideGiftBar', label: '隐藏礼物栏', desc: '移除底部礼物入口与横幅' },
         { key: 'hideGiftEffects', label: '隐藏礼物特效', desc: '不再弹出全屏礼物动画' },
-        { key: 'hideDanmaku', label: '隐藏弹幕', desc: '关闭覆盖画面的滚动弹幕' },
+        { key: 'hideDanmaku', label: '隐藏弹幕', desc: '调用抖音原生弹幕开关，停止弹幕渲染' },
         { key: 'hideActivity', label: '隐藏活动与提示', desc: '屏蔽红包、活动、试看提示' },
         { key: 'hideLikeEffects', label: '隐藏点赞与特效', desc: '关闭飘心、点赞动画' },
         { key: 'hideWatermark', label: '隐藏水印与广告', desc: '保持画面干净' },
@@ -194,9 +194,6 @@
         }
         if (config.hideGiftEffects) {
             hidden.push('#GiftEffectLayout', '#GiftTrayLayout', '#GiftMenuLayout');
-        }
-        if (config.hideDanmaku) {
-            hidden.push('#DanmakuLayout', '.CanvasDanmakuPlugin');
         }
         if (config.hideActivity) {
             hidden.push('#TipsLayout', '#EcmoCardLayout', '#ShortTouchLayout', '#ServiceCenterLayout', '#LinkMicAnimationLayout');
@@ -388,7 +385,19 @@
     };
 
     // 抖音原生 D（旋转画面）、H（原生全屏）与 B（弹幕开关）由脚本接管，按下后不再触发页面行为。
+    // B 本身仍会被脚本内部合成一次，用于真正关闭/开启抖音的原生弹幕渲染。
     const SUPPRESSED_NATIVE_CODES = { KeyD: true, KeyH: true, KeyB: true };
+
+    // 抖音原生弹幕开关（快捷键 B）：关闭后页面会移除弹幕 canvas，渲染循环随之停止。
+    const DANMAKU_CANVAS_SELECTOR = '#DanmakuLayout canvas, .CanvasDanmakuPlugin canvas';
+    const NATIVE_DANMAKU_KEY_CODE = 66;
+    const DANMAKU_SYNC_RETRIES = 3;
+
+    let nativeDanmakuKeyInFlight = false; // 放行脚本自己合成的 B，其余 B 继续拦截
+    let nativeDanmakuSeen = false;       // 是否已见过弹幕 canvas（确认原生弹幕已初始化）
+    let lastNativeDanmakuTap = 0;        // 上次合成 B 的时间，避免一次切换被连发两次
+    let nativeDanmakuVerifyTimer = null;
+    let nativeDanmakuRetries = 0;
 
     function getPlayerFacade() {
         const mount = document.querySelector('.douyin-player');
@@ -511,13 +520,94 @@
         showToast('未找到直播画面');
     }
 
-    // 弹幕本身由页面持续渲染，这里只切换净化样式，不重建播放器。
+    function hasNativeDanmakuCanvas() {
+        const has = !!document.querySelector(DANMAKU_CANVAS_SELECTOR);
+        if (has) nativeDanmakuSeen = true;
+        return has;
+    }
+
+    // 合成一次抖音原生的 B：页面减掉/重建弹幕 canvas，弹幕渲染循环随之停止或恢复。
+    function dispatchNativeDanmakuSwitch() {
+        if (!document.body) return false;
+
+        const event = new KeyboardEvent('keydown', {
+            key: 'b', code: 'KeyB', bubbles: true, cancelable: true, composed: true,
+        });
+        // 兼容仍读取 keyCode / which 的老逻辑。
+        try {
+            Object.defineProperty(event, 'keyCode', { configurable: true, get: function () { return NATIVE_DANMAKU_KEY_CODE; } });
+            Object.defineProperty(event, 'which', { configurable: true, get: function () { return NATIVE_DANMAKU_KEY_CODE; } });
+        } catch (e) { /* ignore */ }
+
+        lastNativeDanmakuTap = Date.now();
+        nativeDanmakuKeyInFlight = true;
+        try {
+            document.body.dispatchEvent(event);
+        } catch (e) {
+            /* ignore */
+        } finally {
+            nativeDanmakuKeyInFlight = false;
+        }
+        return true;
+    }
+
+    // 合成 B 后画布增删可能晚一帧落地，这里复查一次；未生效则有限次重试。
+    function scheduleNativeDanmakuVerify(delay) {
+        if (nativeDanmakuVerifyTimer) return;
+        nativeDanmakuVerifyTimer = setTimeout(function () {
+            nativeDanmakuVerifyTimer = null;
+
+            const hidden = config.hideDanmaku;
+            if (hasNativeDanmakuCanvas() === !hidden) {
+                nativeDanmakuRetries = 0;
+                return;
+            }
+            if (nativeDanmakuRetries >= DANMAKU_SYNC_RETRIES) {
+                nativeDanmakuRetries = 0;
+                return;
+            }
+
+            nativeDanmakuRetries++;
+            dispatchNativeDanmakuSwitch();
+            scheduleNativeDanmakuVerify(700);
+        }, delay);
+    }
+
+    // 让抖音原生弹幕开关与 hideDanmaku 对齐；已对齐时不产生任何按键事件。
+    function syncNativeDanmaku(hidden) {
+        if (!document.body) return false;
+        if (hasNativeDanmakuCanvas() === !hidden) {
+            nativeDanmakuRetries = 0;
+            return true;
+        }
+
+        // 开启方向：还没见过弹幕 canvas 说明原生弹幕尚未初始化，此时发 B 可能把状态翻反。
+        if (!hidden && !nativeDanmakuSeen) return false;
+
+        // 上一次切换还在落地，先复查，避免连发两次 B 把开关翻回去。
+        if (Date.now() - lastNativeDanmakuTap < 500) {
+            scheduleNativeDanmakuVerify(450);
+            return false;
+        }
+
+        dispatchNativeDanmakuSwitch();
+        scheduleNativeDanmakuVerify(600);
+        return true;
+    }
+
+    // 兜底巡检：换画质或播放器重建后 canvas 可能重新出现，这里重新关掉原生开关。
+    function enforceDanmakuPreference() {
+        if (!config.hideDanmaku) return;
+        syncNativeDanmaku(true);
+    }
+
     function toggleDanmaku() {
         config.hideDanmaku = !config.hideDanmaku;
         saveConfig(config);
-        applyStyles();
+        // 直接调用抖音原生开关，让弹幕渲染真正停止或恢复。
+        syncNativeDanmaku(config.hideDanmaku);
         renderUI();
-        showToast(config.hideDanmaku ? '已隐藏弹幕' : '已显示弹幕');
+        showToast(config.hideDanmaku ? '已关闭弹幕' : '已开启弹幕');
     }
 
     function isSuppressedNativeKey(event) {
@@ -955,15 +1045,16 @@
         }, 2200);
     }
 
-    function applyAll() {
+    function applyAll(syncDanmaku) {
         applyStyles();
         applyMutePreference();
+        if (syncDanmaku) syncNativeDanmaku(config.hideDanmaku);
     }
 
     function resetConfig() {
         config = Object.assign({}, DEFAULT_CONFIG);
         saveConfig(config);
-        applyAll();
+        applyAll(true);
         renderUI();
         showToast('已恢复默认设置');
     }
@@ -1020,7 +1111,7 @@
             if (!Object.prototype.hasOwnProperty.call(DEFAULT_CONFIG, key)) return;
             config[key] = !config[key];
             saveConfig(config);
-            applyAll();
+            applyAll(key === 'hideDanmaku');
 
             let message = (config[key] ? '已开启：' : '已关闭：') + (ITEM_MAP[key] ? ITEM_MAP[key].label : key);
             if (key === 'showTopbar' && !config.showTopbar) {
@@ -1074,26 +1165,37 @@
         ensureUI();
         refreshAnchorIfNeeded();
         observePlayerScope();
+        enforceDanmakuPreference();
         if (pendingNewVideo) {
             pendingNewVideo = false;
             enforceMuteOnNewVideos();
         }
     }
 
-    // 播放器内部只关心新增的 video 节点，控制条、画质菜单等变动直接忽略。
+    // 播放器内部只关心新增的 video / 弹幕 canvas 节点，控制条、画质菜单等变动直接忽略。
     function handlePlayerMutations(mutations) {
-        if (pendingNewVideo) return;
+        let hasVideo = false;
+        let hasCanvas = false;
         for (let i = 0; i < mutations.length; i++) {
             const added = mutations[i].addedNodes;
             for (let j = 0; j < added.length; j++) {
                 const node = added[j];
                 if (!node || node.nodeType !== 1) continue;
-                if (node.tagName === 'VIDEO' || (node.firstElementChild && node.querySelector('video'))) {
-                    pendingNewVideo = true;
-                    scheduleGuard(120);
-                    return;
+                if (!hasVideo && (node.tagName === 'VIDEO' || (node.firstElementChild && node.querySelector('video')))) {
+                    hasVideo = true;
+                }
+                if (!hasCanvas && (node.tagName === 'CANVAS' || (node.firstElementChild && node.querySelector('canvas')))) {
+                    hasCanvas = true;
                 }
             }
+        }
+
+        // 弹幕 canvas 重建（切画质、页面重新开启弹幕等）时立刻调用原生开关，浏览器还没绘制就已经关掉。
+        if (hasCanvas) enforceDanmakuPreference();
+
+        if (hasVideo && !pendingNewVideo) {
+            pendingNewVideo = true;
+            scheduleGuard(120);
         }
     }
 
@@ -1152,6 +1254,7 @@
         ensureUI();
         applyMutePreference();
         setupObserver();
+        enforceDanmakuPreference();
         startGuard();
         scheduleQualityCheck(2200);
     }
@@ -1168,6 +1271,8 @@
     // 挂在 window 捕获阶段：先于抖音页面自身的按键处理执行，避免空格等按键被重复处理。
     window.addEventListener('keydown', function (event) {
         if (event.isComposing || event.repeat) return;
+        // 脚本自己合成的原生 B 需要交给抖音处理，其余 B 继续被下方拦截。
+        if (nativeDanmakuKeyInFlight) return;
 
         if (shortcutRecording) {
             event.preventDefault();
