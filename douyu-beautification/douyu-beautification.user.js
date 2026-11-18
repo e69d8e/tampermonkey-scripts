@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         斗鱼直播美化 - 极简纯净版
 // @namespace    https://github.com/douyu-beautification
-// @version      0.0.3
-// @description  斗鱼直播间极简美化：移除广告、礼物栏、侧边推荐、活动弹窗等冗余元素，保留纯净的直播观看体验。支持自动最高画质、顶栏设置按钮、设置即时热生效。
+// @version      0.0.6
+// @description  斗鱼直播间极简美化：移除广告、礼物栏、侧边推荐、活动弹窗等冗余元素，保留纯净的直播观看体验。支持空格暂停/继续、F 全屏、H 网页全屏、D 弹幕开关等可自定义快捷键，自动最高画质、顶栏设置按钮、设置即时热生效。
 // @author       YH
 // @match        *://www.douyu.com/*
 // @match        *://douyu.com/*
@@ -23,7 +23,7 @@
 
     if (window.self !== window.top) return;
 
-    const SCRIPT_VERSION = '0.0.3';
+    const SCRIPT_VERSION = '0.0.6';
 
     const isHomepage = window.location.pathname === '/' || window.location.pathname === '/index.htm' || window.location.pathname === '/index.html';
 
@@ -32,7 +32,6 @@
     // ==========================================
     const DEFAULT_CONFIG = {
         removeHeader: true,         // 精简顶部导航栏
-        removeAside: true,          // 移除右侧边栏（聊天区域）
         removeGiftBar: true,        // 移除礼物栏
         removeFooter: true,         // 移除底部
         removeAds: true,            // 移除广告
@@ -43,24 +42,44 @@
         removeTopBar: true,         // 精简信息栏（粉丝勋章、贵族图标等）
         autoWebFullscreen: false,   // 自动网页全屏
         autoHighQuality: true,      // 自动最高画质
-        darkMode: true,             // 暗黑模式增强
-        showChatPanel: false,       // 显示聊天面板（覆盖 removeAside）
+        hideChatPanel: true,        // 隐藏右侧聊天/弹幕列表
         playerExpand: true,         // 播放器扩展全屏大窗
+        hideDanmaku: false,         // 隐藏覆盖画面的滚动弹幕
+        fullscreenShortcut: 'f',    // 全屏快捷键
+        webFullscreenShortcut: 'h', // 网页全屏快捷键
+        danmakuShortcut: 'd',       // 弹幕开关快捷键
     };
+
+    const SHORTCUT_ITEMS = [
+        { key: 'fullscreenShortcut', label: '全屏', desc: '切换播放器原生全屏' },
+        { key: 'webFullscreenShortcut', label: '网页全屏', desc: '切换斗鱼网页全屏' },
+        { key: 'danmakuShortcut', label: '弹幕开关', desc: '显示或隐藏画面弹幕' },
+    ];
 
     const CONFIG_KEY = 'douyuBeautifyConfig';
 
     function getConfig() {
+        let saved = null;
         if (typeof GM_getValue !== 'undefined') {
-            const saved = GM_getValue(CONFIG_KEY, null);
-            return Object.assign({}, DEFAULT_CONFIG, saved || {});
+            saved = GM_getValue(CONFIG_KEY, null);
+        } else {
+            try {
+                saved = JSON.parse(localStorage.getItem(CONFIG_KEY));
+            } catch (e) {
+                saved = null;
+            }
         }
-        try {
-            const saved = JSON.parse(localStorage.getItem(CONFIG_KEY));
-            return Object.assign({}, DEFAULT_CONFIG, saved || {});
-        } catch (e) {
-            return Object.assign({}, DEFAULT_CONFIG);
+        const cfg = Object.assign({}, DEFAULT_CONFIG, saved || {});
+        // 兼容旧配置：原来「移除右侧边栏」与「保留聊天面板」是一对反向开关，
+        // 现在合并为单一的「隐藏聊天面板」，按旧值推导出真实的隐藏状态。
+        if (saved && typeof saved.hideChatPanel !== 'boolean') {
+            const removeAside = saved.removeAside !== false;
+            const showChatPanel = saved.showChatPanel === true;
+            cfg.hideChatPanel = removeAside && !showChatPanel;
         }
+        delete cfg.removeAside;
+        delete cfg.showChatPanel;
+        return cfg;
     }
 
     function saveConfig(cfg) {
@@ -78,23 +97,8 @@
     //  DOM 选择器注册表（兼容新版与旧版斗鱼）
     // ==========================================
     const SELECTORS = {
-        homepagePlayer: [
-            '.IndexPlayer', '.IndexModule-player', '.layout-Main-player',
-            '.LivePlayer-index', '.FeaturedPlayer', '[class*="index-player"]',
-            '[class*="IndexPlayer"]', '[class*="HomeLive"]', '[class*="home-live"]',
-            '[class*="HomePlayer"]', '[class*="home-player"]', '[class*="player-wrapper__"]',
-            '[class*="player-component__"]', '[class*="player-parallax__"]',
-            '[class*="switcher__"]', '[class*="switcherTabs__"]',
-            '[class*="backgroundHolder__"]', '[class*="backgroundHolderBlur__"]',
-            '[class*="backgroundHandleWrapper__"]', '[class*="backgroundHandle__"]'
-        ],
-        controlBar: '#js-player-controlbar, [class*="ControlBar"], [class*="controlbar"]',
         controlBarRight: '#js-player-controlbar [class*="right-"], [class*="ControlBar"] [class*="right-"], [class*="controlbar"] [class*="right"]',
-        qualityRate: '#js-player-controlbar [class*="rate-"], [class*="ControlBar"] [class*="rate-"], [class*="controlbar"] [class*="rate-"]',
-        qualityList: '#js-player-controlbar [class*="rate-"] ul > li, [class*="ControlBar"] [class*="rate-"] ul > li, [class*="tipItem-"] ul > li, [class*="QualityItem"]',
-        danmuWrap: '[class*="showdanmuWrap"]',
-        volumeWrap: '[class*="volume-"]',
-        video: 'video'
+        qualityRate: '#js-player-controlbar [class*="rate-"], [class*="ControlBar"] [class*="rate-"], [class*="controlbar"] [class*="rate-"]'
     };
 
     // ==========================================
@@ -189,7 +193,7 @@
         }
 
         // ---- 右侧边栏（弹幕/聊天区域） ----
-        if (config.removeAside && !config.showChatPanel) {
+        if (config.hideChatPanel) {
             rules.push(`
                 #js-aside, .layout-Player-aside, .aside-Main,
                 .ChatRoomTabComponent, .RoomInfoTabComponent,
@@ -197,6 +201,16 @@
                 [class*="stage__"] > [class*="sidebar"],
                 [class*="snapbar__"],
                 aside[class*="sidebar"] {
+                    display: none !important;
+                }
+            `);
+        }
+
+        // ---- 画面弹幕开关 ----
+        if (config.hideDanmaku) {
+            rules.push(`
+                [class^="danmu-"], [class*=" danmu-"], [class*="danmuItem"],
+                .DanmuEffectDom, [class*="retentionDanmu"] {
                     display: none !important;
                 }
             `);
@@ -329,7 +343,7 @@
 
         // ---- 播放器尺寸智能适配（全屏满屏 vs 普通模式居中完整大窗） ----
         if (config.playerExpand) {
-            const showChat = !config.removeAside || config.showChatPanel;
+            const showChat = !config.hideChatPanel;
             const hideBottomToolbar = config.removeGiftBar || config.removeRecommend;
             const nonFs = 'body:not([class*="is-fullScreen"]):not([class*="wfs"]):not([class*="fullscreen"])';
 
@@ -899,6 +913,49 @@
             #douyu-beautify-panel .toggle-switch input:checked + .toggle-slider::before {
                 transform: translateX(16px);
             }
+            #douyu-beautify-panel .shortcut-title {
+                font-size: 10.5px;
+                letter-spacing: 0.4px;
+                color: rgba(255, 255, 255, 0.35);
+                padding: 8px 8px 2px;
+                font-weight: 500;
+            }
+            #douyu-beautify-panel .shortcut-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 6px 8px;
+                margin-bottom: 1px;
+                border-radius: 7px;
+                cursor: pointer;
+                transition: background 0.18s ease, box-shadow 0.18s ease;
+            }
+            #douyu-beautify-panel .shortcut-item:hover {
+                background: rgba(255, 255, 255, 0.06);
+            }
+            #douyu-beautify-panel .shortcut-item.is-recording {
+                background: rgba(255, 93, 35, 0.12);
+                box-shadow: inset 0 0 0 1px rgba(255, 93, 35, 0.35);
+            }
+            #douyu-beautify-panel .shortcut-key {
+                min-width: 54px;
+                text-align: center;
+                font-size: 11px;
+                line-height: 1.5;
+                color: rgba(255, 255, 255, 0.7);
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 5px;
+                padding: 2px 7px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                white-space: nowrap;
+            }
+            #douyu-beautify-panel .shortcut-item.is-recording .shortcut-key {
+                color: #ff9a6b;
+                border-color: rgba(255, 93, 35, 0.5);
+                background: rgba(255, 93, 35, 0.15);
+            }
             #douyu-beautify-panel .panel-footer {
                 padding: 10px 14px;
                 border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -1074,11 +1131,15 @@
         }
     }
 
-    function retry(fn, interval = 1000, maxAttempts = 20) {
+    function retry(fn, interval = 1000, maxAttempts = 20, onDone) {
         let attempts = 0;
         const timer = setInterval(() => {
-            if (fn() || ++attempts >= maxAttempts) clearInterval(timer);
+            if (fn() || ++attempts >= maxAttempts) {
+                clearInterval(timer);
+                if (typeof onDone === 'function') onDone();
+            }
         }, interval);
+        return timer;
     }
 
     // ==========================================
@@ -1272,17 +1333,20 @@
         }, 1200, 15);
     }
 
+    function isWebFullscreen() {
+        const bodyCls = document.body?.className || '';
+        return document.body?.classList.contains('is-fullScreenPage') ||
+               document.body?.classList.contains('is-fullScreenPageNew') ||
+               bodyCls.includes('is-fullScreen') ||
+               bodyCls.includes('wfs') ||
+               bodyCls.includes('fullscreen');
+    }
+
     function autoWebFullscreen() {
         if (!config.autoWebFullscreen) return;
 
         retry(() => {
-            const bodyCls = document.body?.className || '';
-            const isAlreadyWfs = document.body?.classList.contains('is-fullScreenPage') ||
-                                 document.body?.classList.contains('is-fullScreenPageNew') ||
-                                 bodyCls.includes('is-fullScreen') ||
-                                 bodyCls.includes('wfs') ||
-                                 bodyCls.includes('fullscreen');
-            if (isAlreadyWfs) return true;
+            if (isWebFullscreen()) return true;
 
             const btn = getWebFullscreenButton();
             if (btn) {
@@ -1291,6 +1355,428 @@
             }
             return false;
         }, 1000, 20);
+    }
+
+    // ==========================================
+    //  快捷键与播放控制
+    // ==========================================
+    const RESERVED_SHORTCUTS = ['escape', 'tab', 'enter'];
+
+    let shortcutRecording = '';
+    let fullscreenToastTimer = null;
+    // 空格交回页面原生处理后，延迟检查页面是否真的暂停成功
+    let nativeSpaceWatchTimer = null;
+    // 斗鱼播放器在暂停后可能重建 video 并自动续播；记录用户意图并在意外续播时补一次暂停
+    let userWantsPaused = false;
+    let userPausedUntil = 0;
+    let pauseWatchTimer = null;
+    let repauseBudget = 0;
+    let lastRepauseAt = 0;
+    let suppressIntentReset = false;
+
+    function formatShortcut(shortcut) {
+        if (!shortcut) return '未设置';
+        const labels = {
+            space: 'Space', escape: 'Esc', tab: 'Tab', enter: 'Enter',
+            backspace: '⌫', delete: 'Del', arrowup: '↑', arrowdown: '↓',
+            arrowleft: '←', arrowright: '→', pageup: 'PgUp', pagedown: 'PgDn',
+            home: 'Home', end: 'End', insert: 'Ins', capslock: 'Caps'
+        };
+        return String(shortcut).split('+').map(part => {
+            if (labels[part]) return labels[part];
+            if (part.length === 1) return part.toUpperCase();
+            return part.charAt(0).toUpperCase() + part.slice(1);
+        }).join(' + ');
+    }
+
+    function shortcutFromEvent(event) {
+        let key = event.key || '';
+        // 个别环境（自动化/输入法）真实按键的 key 为空，用 code 兜底
+        if (!key && event.code) {
+            if (event.code === 'Space') key = ' ';
+            else if (/^Key[A-Z]$/.test(event.code)) key = event.code.slice(3).toLowerCase();
+            else if (/^Digit[0-9]$/.test(event.code)) key = event.code.slice(5);
+        }
+        if (!key) return '';
+        const parts = [];
+        if (event.ctrlKey) parts.push('ctrl');
+        if (event.altKey) parts.push('alt');
+        if (event.shiftKey) parts.push('shift');
+        if (event.metaKey) parts.push('meta');
+        if (key === ' ' || key === 'Spacebar') key = 'space';
+        else key = key.toLowerCase();
+        parts.push(key);
+        return parts.join('+');
+    }
+
+    function isTypingTarget(event) {
+        const target = event.target;
+        if (!target || !(target instanceof Element)) return false;
+        // 设置面板不再整体屏蔽快捷键：点过开关后焦点仍留在面板内，
+        // 旧逻辑会让空格失效（斗鱼原生空格又会自动恢复播放）；只拦真正的文本输入
+        if (target.closest('textarea, select, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"]')) return true;
+        const input = target.closest('input');
+        if (!input) return false;
+        const type = (input.getAttribute('type') || 'text').toLowerCase();
+        return !['button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'color', 'file', 'image'].includes(type);
+    }
+
+    function shortcutOwner(shortcut, selfKey) {
+        for (const item of SHORTCUT_ITEMS) {
+            if (item.key !== selfKey && config[item.key] === shortcut) return item;
+        }
+        return null;
+    }
+
+    function getLiveVideo() {
+        const videos = Array.from(document.querySelectorAll('#js-player-video video, #js-player-video-first video, [class*="player__"] video, .playerWrap__ video'));
+        const liveVideo = videos.find(v => !v.closest('[class*="ad-wrap"], [class*="AdWrap"], [class*="AdBanner"], [class*="adBanner"], [class*="IconCardAd"], .AdCover'));
+        return liveVideo || videos[0] || document.querySelector('video');
+    }
+
+    function ensureLiveRoom() {
+        if (!isHomepage) return true;
+        showToast('请在直播间内使用该功能');
+        return false;
+    }
+
+    function getPlayPauseButton() {
+        const scope = document.querySelector('#js-player-controlbar');
+        if (!scope) return null;
+        const candidates = Array.from(scope.querySelectorAll('i[class*="icon-"], button, [role="button"], [aria-label], [title]'));
+        // 先按 svg 图标判定，避免不同房间/布局类名变化导致找不到控制键
+        for (const el of candidates) {
+            if (/(?:pause|play)_svg/i.test(el.innerHTML || '')) return el;
+        }
+        for (const el of candidates) {
+            const label = `${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`;
+            if (/暂停|播放/.test(label)) return el;
+        }
+        return null;
+    }
+
+    function clickPlayPause(button) {
+        suppressIntentReset = true;
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        suppressIntentReset = false;
+    }
+
+    function ensurePaused() {
+        if (!userWantsPaused || suppressIntentReset) return;
+        if (Date.now() > userPausedUntil || repauseBudget <= 0) {
+            userWantsPaused = false;
+            return;
+        }
+        if (Date.now() - lastRepauseAt < 350) return;
+        const current = getLiveVideo();
+        if (!current || current.paused) return;
+        lastRepauseAt = Date.now();
+        repauseBudget -= 1;
+        const button = getPlayPauseButton();
+        if (button && /pause_svg/i.test(button.innerHTML)) {
+            clickPlayPause(button);
+            // 部分播放器内核会忽略合成 click；点击后仍未暂停就直接补 pause
+            try { if (!current.paused) current.pause(); } catch (e) { /* ignore */ }
+        } else {
+            try { current.pause(); } catch (e) { /* ignore */ }
+        }
+    }
+
+    function schedulePauseCheck(delay = 260) {
+        clearTimeout(pauseWatchTimer);
+        pauseWatchTimer = setTimeout(function tick() {
+            if (!userWantsPaused) return;
+            if (Date.now() > userPausedUntil) {
+                userWantsPaused = false;
+                return;
+            }
+            ensurePaused();
+            pauseWatchTimer = setTimeout(tick, 700);
+        }, delay);
+    }
+
+    function togglePlayback() {
+        if (!ensureLiveRoom()) return;
+        const video = getLiveVideo();
+        if (!video) {
+            showToast('未找到直播视频');
+            return;
+        }
+        if (video.paused) {
+            userWantsPaused = false;
+            userPausedUntil = 0;
+            repauseBudget = 0;
+            clearTimeout(pauseWatchTimer);
+            const button = getPlayPauseButton();
+            if (button && /play_svg/i.test(button.innerHTML)) {
+                clickPlayPause(button);
+            } else {
+                const started = video.play();
+                if (started && typeof started.catch === 'function') started.catch(() => {});
+            }
+            showToast('已继续播放');
+            return;
+        }
+
+        // 暂停后播放器可能重建 video 或自动续播：优先点它自己的暂停键，
+        // 并在 6 秒内持续核对补按（直接 video.pause() 实测约 90ms 后被拉起）。
+        userWantsPaused = true;
+        userPausedUntil = Date.now() + 6000;
+        repauseBudget = 8;
+        lastRepauseAt = 0;
+        const button = getPlayPauseButton();
+        if (button && /pause_svg/i.test(button.innerHTML)) {
+            clickPlayPause(button);
+            // 合成 click 可能被播放器异步处理甚至忽略，先直接暂停保证即时反馈
+            try { if (!video.paused) video.pause(); } catch (e) { /* ignore */ }
+        } else {
+            try { video.pause(); } catch (e) { /* ignore */ }
+        }
+        showToast('已暂停直播');
+        schedulePauseCheck();
+    }
+
+    // 用户主动点播放器控制条时，取消“保持暂停”的补偿，避免和用户操作打架
+    document.addEventListener('click', (event) => {
+        if (suppressIntentReset) return;
+        const target = event.target;
+        if (!(target instanceof Element) || !target.closest('#js-player-controlbar')) return;
+        const button = getPlayPauseButton();
+        if (button && (button === target || button.contains(target))) {
+            userWantsPaused = false;
+            userPausedUntil = 0;
+            repauseBudget = 0;
+            clearTimeout(pauseWatchTimer);
+        }
+    }, true);
+
+    // 播放器重建 video 或内部逻辑自动续播时，按用户意图补回暂停
+    document.addEventListener('play', (event) => {
+        if (!userWantsPaused || suppressIntentReset) return;
+        if (Date.now() > userPausedUntil) return;
+        schedulePauseCheck(80);
+    }, true);
+
+    // 控制栏最后两个图标依次是「网页全屏」和「全屏」：
+    // 倒数第二个负责网页全屏（状态在 body 的 is-fullScreenPage 类上），
+    // 最后一个四角图标是斗鱼原生全屏按钮。
+    function getFullscreenButton() {
+        const rightBar = document.querySelector(SELECTORS.controlBarRight);
+        if (!rightBar) return null;
+        const last = rightBar.lastElementChild;
+        if (last && last.querySelector('svg')) return last;
+        return rightBar.querySelector('svg path[d*="M25 20h-5v5"]')?.closest('i, button, div') || null;
+    }
+
+    function isFullscreen() {
+        return !!(document.fullscreenElement || document.body?.classList.contains('is-fullScreen'));
+    }
+
+    function toggleFullscreen() {
+        if (!ensureLiveRoom()) return;
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+            showToast('已退出全屏');
+            return;
+        }
+        const notify = () => {
+            clearTimeout(fullscreenToastTimer);
+            fullscreenToastTimer = setTimeout(() => {
+                showToast(isFullscreen() ? '已进入全屏' : '已退出全屏');
+            }, 250);
+        };
+        // 优先走浏览器 Fullscreen API（真正的原生全屏，隐藏浏览器界面）；
+        // 被浏览器策略拒绝时，退回点击斗鱼自带的全屏按钮。
+        const target = document.querySelector('#js-player-main') || document.querySelector('#js-player-video-first');
+        if (target && target.requestFullscreen) {
+            target.requestFullscreen().then(notify).catch(() => {
+                const btn = getFullscreenButton();
+                if (btn) btn.click();
+                notify();
+            });
+            return;
+        }
+        const btn = getFullscreenButton();
+        if (btn) btn.click();
+        notify();
+    }
+
+    function toggleWebFullscreen() {
+        if (!ensureLiveRoom()) return;
+        const btn = getWebFullscreenButton();
+        if (!btn) {
+            showToast('未找到网页全屏按钮');
+            return;
+        }
+        btn.click();
+        clearTimeout(fullscreenToastTimer);
+        fullscreenToastTimer = setTimeout(() => {
+            showToast(isWebFullscreen() ? '已进入网页全屏' : '已退出网页全屏');
+        }, 180);
+    }
+
+    function syncDanmakuToggle() {
+        const input = document.querySelector('#douyu-beautify-panel input[data-key="hideDanmaku"]');
+        if (input) input.checked = !!config.hideDanmaku;
+    }
+
+    // 斗鱼的画面弹幕开关有两个状态的图标（同一个 DOM 位）：
+    //   开启：.showdanmuWrap-9c22cd 显示，内部 i 可点击关闭；
+    //   关闭：同一节点加上 .removed-304d55 并隐藏，其紧邻的 i.icon-c8be96 可点击开启。
+    // 优先点击斗鱼原生开关，CSS 仅作为找不到按钮时的兜底。
+    function getNativeDanmakuToggle() {
+        const wrap = document.querySelector('.showdanmuWrap-9c22cd');
+        if (!wrap) return null;
+        const isOn = !wrap.classList.contains('removed-304d55');
+        const button = isOn ? wrap.querySelector('i.icon-c8be96') : wrap.nextElementSibling;
+        if (!button || !button.classList.contains('icon-c8be96')) return null;
+        return { isOn: isOn, button: button };
+    }
+
+    function setNativeDanmaku(shouldShow) {
+        const toggle = getNativeDanmakuToggle();
+        if (!toggle) return false;
+        if (toggle.isOn === !!shouldShow) return true;
+        toggle.button.click();
+        return true;
+    }
+
+    // 设置项为「隐藏弹幕」时，把原生开关也关掉（找不到原生控件则不处理，交给 CSS 兜底）
+    function syncNativeDanmakuPreference() {
+        if (config.hideDanmaku) setNativeDanmaku(false);
+    }
+
+    function toggleDanmaku() {
+        if (!ensureLiveRoom()) return;
+        config.hideDanmaku = !config.hideDanmaku;
+        setNativeDanmaku(!config.hideDanmaku);
+        saveConfig(config);
+        applyStyles();
+        syncDanmakuToggle();
+        showToast(config.hideDanmaku ? '已隐藏弹幕' : '已显示弹幕');
+    }
+
+    function renderShortcutRows() {
+        const panel = document.getElementById('douyu-beautify-panel');
+        if (!panel) return;
+        panel.querySelectorAll('[data-shortcut-key]').forEach(row => {
+            const key = row.dataset.shortcutKey;
+            const badge = row.querySelector('.shortcut-key');
+            const recording = shortcutRecording === key;
+            row.classList.toggle('is-recording', recording);
+            if (badge) badge.textContent = recording ? '按下按键…' : formatShortcut(config[key]);
+        });
+    }
+
+    function startShortcutRecording(key) {
+        shortcutRecording = key;
+        renderShortcutRows();
+        showToast('按下新快捷键，Esc 取消');
+    }
+
+    function cancelShortcutRecording(silent) {
+        if (!shortcutRecording) return;
+        shortcutRecording = '';
+        renderShortcutRows();
+        if (!silent) showToast('已取消快捷键设置');
+    }
+
+    function handleShortcutRecording(event) {
+        event.preventDefault();
+        // 用 stopImmediatePropagation 一并拦截同一 window 上的其它监听器（斗鱼自身
+        // 也有捕获阶段快捷键，stopPropagation 拦不住同节点监听器）。
+        event.stopImmediatePropagation();
+        if (event.repeat) return;
+        if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key)) return;
+        if (event.key === 'Escape') {
+            cancelShortcutRecording();
+            return;
+        }
+        if (event.ctrlKey || event.altKey || event.metaKey) {
+            showToast('暂不支持 Ctrl / Alt / Cmd 组合键');
+            return;
+        }
+        const shortcut = shortcutFromEvent(event);
+        if (!shortcut) return;
+        if (RESERVED_SHORTCUTS.includes(shortcut)) {
+            showToast('该按键为系统保留，请换一个');
+            return;
+        }
+        const owner = shortcutOwner(shortcut, shortcutRecording);
+        if (owner) {
+            showToast(`「${formatShortcut(shortcut)}」已用于${owner.label}`);
+            return;
+        }
+        const item = SHORTCUT_ITEMS.find(i => i.key === shortcutRecording);
+        config[shortcutRecording] = shortcut;
+        saveConfig(config);
+        shortcutRecording = '';
+        renderShortcutRows();
+        showToast(`已设置${item ? item.label : '快捷键'}: ${formatShortcut(shortcut)}`);
+    }
+
+    // 挂在 window 捕获阶段，先于播放器/页面处理按键
+    window.addEventListener('keydown', (event) => {
+        // 页面自身的热键实现有时会重新派发合成 keydown（实测按一次 D 会来两次，
+        // 第二次 isTrusted=false）；只响应真实用户输入，避免快捷键被触发两遍。
+        if (!event.isTrusted) return;
+        if (shortcutRecording) {
+            handleShortcutRecording(event);
+            return;
+        }
+        if (event.isComposing || event.repeat) return;
+        if (isHomepage) return;
+        if (isTypingTarget(event)) return;
+
+        const shortcut = shortcutFromEvent(event);
+        if (!shortcut) return;
+        // 空格不设快捷键、不拦截，交回斗鱼原生播放/暂停；仅观察页面结果，
+        // 页面没响应或暂停后被自动拉起时再兜底补一次，避免不同播放器实现下空格失效。
+        if (shortcut === 'space') {
+            watchNativeSpacePlayback();
+            return;
+        }
+        const actions = [
+            { shortcut: config.fullscreenShortcut, run: toggleFullscreen },
+            { shortcut: config.webFullscreenShortcut, run: toggleWebFullscreen },
+            { shortcut: config.danmakuShortcut, run: toggleDanmaku },
+        ];
+        for (const action of actions) {
+            if (action.shortcut && action.shortcut === shortcut) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                action.run();
+                return;
+            }
+        }
+    }, true);
+
+    function watchNativeSpacePlayback() {
+        const source = getLiveVideo();
+        if (!source) return;
+        const wasPaused = source.paused;
+        clearTimeout(nativeSpaceWatchTimer);
+        nativeSpaceWatchTimer = setTimeout(() => {
+            const video = getLiveVideo();
+            if (!video) return;
+            if (wasPaused) {
+                // 页面上一次处于暂停：页面未响应时由脚本继续播放
+                if (video.paused) togglePlayback();
+                return;
+            }
+            if (video.paused) {
+                // 页面已正常暂停：接管“保持暂停”，防止播放器稍后自动续播
+                userWantsPaused = true;
+                userPausedUntil = Date.now() + 6000;
+                repauseBudget = 8;
+                lastRepauseAt = 0;
+                showToast('已暂停直播');
+                schedulePauseCheck();
+                return;
+            }
+            // 页面完全没响应，或暂停后又被自动拉起：补一次暂停
+            togglePlayback();
+        }, 450);
     }
 
     // ==========================================
@@ -1327,14 +1813,7 @@
 
     function cleanHomepagePlayer() {
         if (!isHomepage) return;
-
         document.querySelectorAll('video').forEach(stopHomepageVideo);
-
-        SELECTORS.homepagePlayer.forEach(sel => {
-            document.querySelectorAll(sel).forEach(el => {
-                el.querySelectorAll('video').forEach(stopHomepageVideo);
-            });
-        });
     }
 
     // MutationObserver 动态清理(类名片段 → 所属配置开关,尊重用户设置)
@@ -1357,6 +1836,38 @@
         { cls: 'toolbar__', key: 'removeRecommend' }
     ];
 
+    const OBSERVER_NOISE_SELECTORS = [
+        '.layout-Player-aside', '#js-aside',
+        '[class*="chatroom"]', '[class*="Chatroom"]',
+        '[class*="barrage"]',
+        '[class*="gift-wrap"]', '[class*="giftBar"]', '[class*="GiftBar"]',
+        '[class*="danmuItem"]', '[class*="danmu-"]'
+    ];
+    let observerNoiseRoots = [];
+    let observerNoiseRootsAt = 0;
+
+    // 聊天/礼物/弹幕子树高频更新，但与清理逻辑无关，直接跳过
+    function isNoiseMutationTarget(target) {
+        if (!target || target.nodeType !== 1) return false;
+        const now = Date.now();
+        if (now - observerNoiseRootsAt > 4000) {
+            const roots = [];
+            OBSERVER_NOISE_SELECTORS.forEach(sel => {
+                try {
+                    document.querySelectorAll(sel).forEach(el => {
+                        if (roots.length < 30 && !roots.includes(el)) roots.push(el);
+                    });
+                } catch (e) { /* ignore */ }
+            });
+            observerNoiseRoots = roots;
+            observerNoiseRootsAt = now;
+        }
+        for (const root of observerNoiseRoots) {
+            if (root === target || root.contains(target)) return true;
+        }
+        return false;
+    }
+
     let observerTimer = null;
     let uiMounted = false;
     let reattachTimer = null;
@@ -1369,29 +1880,38 @@
         createHeaderSettingsButton();
     }
 
+    function startGuard() {
+        setInterval(() => {
+            if (!uiMounted || document.hidden) return;
+            ensureSettingsPanel();
+            if (!document.getElementById('douyu-beautify-header-btn')) createHeaderSettingsButton();
+            if (isHomepage) cleanHomepagePlayer();
+            syncNativeDanmakuPreference();
+        }, 4000);
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden || !uiMounted) return;
+            forceRemoveElements();
+            ensureSettingsPanel();
+        });
+    }
+
     function startObserver() {
         if (!document.body) return;
         const observer = new MutationObserver((mutations) => {
+            if (document.hidden) return;
             let shouldCleanHomepage = false;
             let shouldForceRemove = false;
             let shouldReattachHeaderBtn = false;
 
             for (const mutation of mutations) {
+                if (isNoiseMutationTarget(mutation.target)) continue;
+
                 for (const node of mutation.addedNodes) {
                     if (node.nodeType !== 1) continue;
                     if (node.id && node.id.startsWith('douyu-beautify-')) continue;
 
-                    if (isHomepage && (
-                        node.tagName === 'VIDEO' ||
-                        node.querySelector?.('video') ||
-                        SELECTORS.homepagePlayer.some(sel => {
-                            try {
-                                return (node.matches && node.matches(sel)) || (node.querySelector && node.querySelector(sel));
-                            } catch (e) {
-                                return false;
-                            }
-                        })
-                    )) {
+                    if (isHomepage && (node.tagName === 'VIDEO' || node.querySelector?.('video'))) {
                         shouldCleanHomepage = true;
                     }
 
@@ -1442,10 +1962,9 @@
         {
             group: '界面元素清理',
             id: 'clean',
-            count: 10,
+            count: 9,
             items: [
                 { key: 'removeHeader', label: '精简顶部导航', desc: '仅保留搜索、关注、消息、头像' },
-                { key: 'removeAside', label: '移除右侧边栏', desc: '隐藏弹幕/聊天区域' },
                 { key: 'removeGiftBar', label: '移除礼物栏', desc: '隐藏礼物赠送及特效区域' },
                 { key: 'removeFooter', label: '移除页脚', desc: '隐藏底部页脚与版权信息' },
                 { key: 'removeAds', label: '移除广告', desc: '屏蔽全站横幅及活动广告' },
@@ -1459,12 +1978,13 @@
         {
             group: '播放与功能增强',
             id: 'player',
-            count: 4,
+            count: 5,
             items: [
                 { key: 'playerExpand', label: '播放器扩展大窗', desc: '普通模式 16:9 居中大窗，全屏 100% 满屏' },
                 { key: 'autoHighQuality', label: '自动最高画质', desc: '进入直播间自动选择最高可用画质' },
                 { key: 'autoWebFullscreen', label: '自动网页全屏', desc: '进入直播间后自动切换网页全屏' },
-                { key: 'showChatPanel', label: '保留聊天面板', desc: '保留右侧弹幕聊天区（覆盖侧边栏移除）' },
+                { key: 'hideChatPanel', label: '隐藏聊天面板', desc: '隐藏右侧聊天/弹幕列表（关闭即恢复）' },
+                { key: 'hideDanmaku', label: '隐藏画面弹幕', desc: '关闭覆盖在直播画面上的滚动弹幕' },
             ]
         }
     ];
@@ -1504,10 +2024,14 @@
         panel.classList.toggle('is-visible', willBeVisible);
         if (overlay) overlay.classList.toggle('is-visible', willBeVisible);
         if (btn) btn.classList.toggle('is-active', willBeVisible);
+        if (!willBeVisible) cancelShortcutRecording(true);
     }
 
+    let headerBtnRetryTimer = null;
+
     function createHeaderSettingsButton() {
-        retry(() => {
+        if (document.getElementById('douyu-beautify-header-btn') || headerBtnRetryTimer) return;
+        headerBtnRetryTimer = retry(() => {
             if (document.getElementById('douyu-beautify-header-btn')) return true;
 
             const headerTarget = document.querySelector('.Header-right') ||
@@ -1539,7 +2063,7 @@
                 headerTarget.appendChild(btn);
             }
             return true;
-        }, 800, 20);
+        }, 800, 20, () => { headerBtnRetryTimer = null; });
     }
 
     function createSettingsPanel() {
@@ -1561,12 +2085,12 @@
                 <button class="panel-tab is-active" data-tab="clean">
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                     <span>界面净化</span>
-                    <span class="tab-badge">10</span>
+                    <span class="tab-badge">${SETTINGS_GROUPS[0].count}</span>
                 </button>
                 <button class="panel-tab" data-tab="player">
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     <span>播放体验</span>
-                    <span class="tab-badge">4</span>
+                    <span class="tab-badge">${SETTINGS_GROUPS[1].count}</span>
                 </button>
             </div>
         `;
@@ -1585,6 +2109,18 @@
                         </label>
                     </div>
                 `).join('')}
+                ${group.id === 'player' ? `
+                    <div class="shortcut-title">快捷键（点击后按下新按键）</div>
+                    ${SHORTCUT_ITEMS.map(item => `
+                        <div class="shortcut-item" data-shortcut-key="${item.key}" title="点击后按下新按键">
+                            <div>
+                                <div class="setting-label">${item.label}</div>
+                                <div class="setting-desc">${item.desc}</div>
+                            </div>
+                            <span class="shortcut-key">${formatShortcut(config[item.key])}</span>
+                        </div>
+                    `).join('')}
+                ` : ''}
             </div>
         `).join('');
 
@@ -1630,12 +2166,33 @@
         panel.querySelectorAll('input[type="checkbox"]').forEach(input => {
             input.addEventListener('change', () => {
                 config[input.dataset.key] = input.checked;
+                if (input.dataset.key === 'hideDanmaku') {
+                    setNativeDanmaku(!input.checked);
+                }
                 saveConfig(config);
                 applyStyles();
                 forceRemoveElements();
                 const label = input.closest('.setting-item')?.querySelector('.setting-label')?.textContent || '';
                 showToast(`已${input.checked ? '开启' : '关闭'}: ${label}`);
             });
+        });
+
+        // 快捷键录制
+        panel.querySelectorAll('[data-shortcut-key]').forEach(row => {
+            row.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const key = row.dataset.shortcutKey;
+                if (shortcutRecording === key) {
+                    cancelShortcutRecording();
+                } else {
+                    startShortcutRecording(key);
+                }
+            });
+        });
+        panel.addEventListener('click', (e) => {
+            if (shortcutRecording && !e.target.closest('[data-shortcut-key]')) {
+                cancelShortcutRecording(true);
+            }
         });
 
         // 恢复默认设置
@@ -1645,6 +2202,7 @@
             panel.querySelectorAll('input[type="checkbox"]').forEach(input => {
                 input.checked = !!config[input.dataset.key];
             });
+            renderShortcutRows();
             applyStyles();
             forceRemoveElements();
             showToast('已恢复为默认设置');
@@ -1676,6 +2234,10 @@
     // ==========================================
     if (typeof GM_registerMenuCommand !== 'undefined') {
         GM_registerMenuCommand('⚡ 斗鱼美化 - 打开设置', togglePanel);
+        GM_registerMenuCommand('⏯️ 播放 / 暂停直播', togglePlayback);
+        GM_registerMenuCommand('💬 显示 / 隐藏弹幕', toggleDanmaku);
+        GM_registerMenuCommand('🖥️ 切换全屏', toggleFullscreen);
+        GM_registerMenuCommand('🖱️ 切换网页全屏', toggleWebFullscreen);
         GM_registerMenuCommand('🔄 斗鱼美化 - 恢复默认设置', () => {
             saveConfig(DEFAULT_CONFIG);
             location.reload();
@@ -1689,6 +2251,7 @@
         if (isHomepage) cleanHomepagePlayer();
         applyStyles();
         startObserver();
+        startGuard();
         // 兜底挂载: 若资源阻塞导致 load 延迟太久，等待 Next.js 水合完成后再挂载设置 UI
         setTimeout(() => {
             if (!uiMounted) mountUI();
