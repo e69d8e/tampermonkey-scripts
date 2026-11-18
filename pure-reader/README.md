@@ -1,13 +1,13 @@
-# 纯净阅读 (PureReader) — 多平台免登录去广告与沉浸阅读增强
+# 纯净阅读 (PureReader) — 全网通用沉浸阅读、排版净化与元素橡皮擦
 
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-v4.18%2B-00485B?logo=tampermonkey&logoColor=white)](https://www.tampermonkey.net/)
 [![JavaScript](https://img.shields.io/badge/JavaScript-ES6%2B-F7DF1E?logo=javascript&logoColor=black)](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Supported-CSDN%20|%20知乎%20|%20掘金%20|%20简书%20|%20博客园%20|%20微信公众号-orange.svg)](#平台适配矩阵)
+[![Platform](https://img.shields.io/badge/Supported-6大中文平台%20%2B%20全网通用兜底-orange.svg)](#平台适配矩阵)
 
-专为 **CSDN、知乎、掘金、简书、博客园、微信公众号** 等主流中文技术与内容平台量身打造的极简、轻量、高颜值纯净阅读增强用户脚本。
+为 **CSDN、知乎、掘金、简书、博客园、微信公众号** 提供深度免登录去广告与宽屏排版净化，同时内置 **全网兜底通用阅读模式 (Universal Fallback)** 与 **可视化元素橡皮擦 (Element Zapper)**，可在任意个人博客、Substack、Medium、新闻站点中自动识别正文并按域名持久屏蔽干扰元素。
 
-核心攻克“强制未登录弹窗阻断阅读”、“各类营销推广横幅喧宾夺主”、“禁止复制与版权小尾巴劫持”、“外链繁琐安全中转”等核心痛点，并提供智能悬浮大纲 (TOC)、4 种护眼主题的沉浸阅读模式 (Zen Mode) 以及一键导出 Markdown / PDF 的完整阅读套件。
+核心提供：智能正文提取、悬浮大纲目录 (TOC)、4 种护眼主题沉浸阅读模式 (Zen Mode)、一键导出 Markdown / PDF，以及在未知网页零侵入运行的按需唤醒体验。
 
 ---
 
@@ -18,40 +18,36 @@
 ```mermaid
 flowchart TB
     subgraph Browser["浏览器运行环境 (Chrome / Edge / Safari / Firefox)"]
-        subgraph TM["Tampermonkey 沙箱环境 (pure-reader.user.js)"]
+        subgraph TM["Tampermonkey 沙箱环境 (pure-reader.user.js v0.1.0)"]
             direction TB
             
-            subgraph CoreEngine["底层核心防护引擎 (document-start)"]
-                CSS_INJECT["动态样式注入器 (GM_addStyle)"]
-                COPY_GUARD["剪贴板防劫持与复制解禁器 (Clipboard API)"]
+            subgraph CoreEngine["底层核心防护与存储引擎 (document-start)"]
+                CSS_INJECT["动态样式注入器 (safeAddStyle & 域名橡皮擦规则前置注入)"]
+                COPY_GUARD["剪贴板防劫持与复制解禁器 (已知平台清洗 / 未知站点零误伤)"]
                 LINK_GUARD["外链直达跳转器 (URL Rewrite & Click Capture)"]
-                CONFIG_MGR["配置管理与持久化 (GM_getValue / GM_setValue)"]
+                CONFIG_MGR["配置与按域名规则存储 (pureReaderConfig & pureReaderZapperRules)"]
             end
 
-            subgraph Adapters["多平台适配器矩阵 (Platform Adapters)"]
-                ADP_CSDN["CSDN 适配器<br>(免登录全文/防弹窗/代码免登录复制)"]
-                ADP_ZHIHU["知乎 适配器<br>(锁屏弹窗熔断/去盐选广告/居中排版)"]
-                ADP_JUEJIN["掘金 适配器<br>(去APP引导/精简右侧推广)"]
-                ADP_JIANSHU["简书 适配器<br>(去底部唤端/展开全文)"]
-                ADP_CNBLOGS["博客园 适配器<br>(去横幅广告/聚焦正文)"]
-                ADP_WEIXIN["微信公众号 适配器<br>(桌面端宽屏/去二维码)"]
+            subgraph ExtractionLayer["正文识别与适配器矩阵"]
+                KNOWN_ADP["6大中文平台深度适配器<br>(CSDN / 知乎 / 掘金 / 简书 / 博客园 / 公众号)"]
+                UNIV_EXT["全网兜底正文识别引擎 (UniversalExtractor)<br>(CJK+英文加权 / 标点密度 / 多章节聚合)"]
             end
 
-            subgraph ReadingSuite["高级阅读套件 (Reading Suite)"]
+            subgraph ReadingSuite["高级阅读与净化套件"]
+                ZAPPER["可视化元素橡皮擦 (ElementZapper)<br>(悬停高亮 / ↑↓层级微调 / 实时撤销)"]
                 TOC_CTRL["智能悬浮大纲控制器 (Floating TOC)"]
-                ZEN_MODE["沉浸极简阅读器 (4 种护眼色彩方案)"]
-                EXPORTER["知识导出引擎 (Markdown / Print PDF)"]
+                ZEN_MODE["沉浸极简阅读器 (对比度安全修复 & src/picture 恢复)"]
+                EXPORTER["知识导出引擎 (Markdown 绝对路径补全 / Print PDF)"]
                 DOCK_UI["Anthropic 设计风悬浮工具坞 & 设置面板"]
             end
 
-            CoreEngine --> Adapters
-            Adapters --> ReadingSuite
+            CoreEngine --> ExtractionLayer
+            ExtractionLayer --> ReadingSuite
         end
 
         subgraph TargetPages["宿主目标站点"]
-            P_CSDN["CSDN 博客 / 文档"]
-            P_ZHIHU["知乎 问答 / 专栏"]
-            P_OTHERS["掘金 / 简书 / 博客园 / 微信公众号"]
+            P_KNOWN["CSDN / 知乎 / 掘金 / 简书 / 博客园 / 公众号"]
+            P_UNIV["任意博客 / Substack / Medium / 新闻与文档站 (http/https)"]
         end
 
         ReadingSuite -.-> TargetPages
@@ -103,6 +99,7 @@ sequenceDiagram
 | **简书** | `*://*.jianshu.com/*` | • **排版加宽 (1000px)**：精准穿透定位核心文章容器 `article._2rhmJa` 及多层父容器 `div._3VRLsv, div._gp-ck, section.ouvJEz`，彻底粉碎 `730px` 狭窄排版上限，自适应展开至 `1000px`<br>• 隐藏顶部导航栏 (`nav.navbar`)，重置正文顶部间距<br>• 自动展开折叠文章<br>• 拦截底部“打开 APP 查看全部”引导横条与广告 |
 | **博客园** | `*://*.cnblogs.com/*` | • **宽屏舒适视野 (1140px)**：突破 Flex 容器 `#main` 的原生 `flex-basis: 880px` 挤压，重置为 `flex: 1 1 auto`，隐藏侧边栏并将 `#mainContent` 释放拓宽至 `1140px`<br>• 移除官方吸顶顶部栏 (`#top_nav`) 与博主自定义大头图横幅 (`#header`/`#blogHeader`)<br>• 移除顶部、侧边及正文下方的全部广告位（c1/c2/b1/b2/ad_t2 等）<br>• 隐藏冗余侧边组件，聚焦博客正文 |
 | **微信公众号** | `*://mp.weixin.qq.com/*` | • **桌面端加宽 (980px)**：强制重写官方桌面端内嵌的 `.rich_media_area_primary { max-width: 677px !important }` 锁死上限，连带放开 `.rich_media_area_primary_inner` 与 `#img-content` 至 `980px`<br>• 移除桌面端文章侧边扫码登录提示二维码与多余导流组件<br>• 解除文本长按与拖拽选中限制，提升宽屏阅读舒适度 |
+| **全网通用兜底** | `http://*/*`<br>`https://*/*` | • **轻量启发式正文识别 (`UniversalExtractor`)**：基于 CJK+英文加权长度、标点密度、语义标签与链接密度自动定位博客/Substack/Medium/新闻正文，兼容多 `<section>` 文章聚合，不侵入首页卡片流与后台 Web 应用<br>• **按需浮窗展示 (`universalDockMode`)**：默认仅在识别到长文时显示右下角工具坞 (`auto`)，非文章页仍可通过快捷键或油猴菜单唤起<br>• **可视化元素橡皮擦 (`ElementZapper`)**：任意网页悬停点击即可隐藏干扰元素，按域名在 `document-start` 自动屏蔽 |
 
 ---
 
@@ -115,26 +112,37 @@ sequenceDiagram
   - **清新护眼绿 (Eye-Care)**：底色 `#edf5ec`，文字 `#243324`，柔和舒适。
   - **纯白极简 (Clean White)**：底色 `#ffffff`，文字 `#1a1a1a`，对标电子墨水屏。
   - **深邃夜间黑 (Dark Night)**：底色 `#161615`，文字 `#dcdad5`，夜间深色不刺眼。
+- **跨站点适配增强**：对暗色宿主站点补充浅色主题高对比度文字与表格覆盖规则，并自动恢复 `<picture>` `srcset` 与 `data-src` 懒加载图片、剥离评论区/订阅框/推荐阅读/已擦除元素。
 - **排版微调**：支持 `A-` / `A+` 实时字号缩放（14px - 26px）、版芯宽度调节（860px / 1000px / 1180px 循环切换，默认 1000px 大版芯）。
 
 ### 2. 悬浮智能大纲 (Floating TOC)
 - **全局快捷键**：`Alt + T`（或点击悬浮 Dock 第二个图标）快速展开/折叠。
-- **层级感知**：自动解析文章内部 `H1-H4` 标题，构建阶梯缩进目录树。
+- **层级感知**：自动解析文章内部 `H1-H4` 标题（自动过滤订阅表单、推荐框、评论区及橡皮擦隐藏区域内标题），构建阶梯缩进目录树。
 - **实时跟踪**：监听页面滚动位置，自动高亮当前阅读小节，点击平滑平移至目标锚点。
 
 ### 3. 本地知识归档导出
-- **导出 Markdown**：内建轻量 AST 节点转换器，将标题、段落、粗体、斜体、列表、引用块、图片以及**带语法高亮标签的代码块**标准化输出为 `.md` 文件。
+- **导出 Markdown**：内建轻量 AST 节点转换器，将标题、段落、粗体、斜体、列表、引用块、表格、图片以及**带语法高亮标签的代码块**标准化输出为 `.md` 文件，并自动补全外链与图片相对路径为绝对 URL。
 - **打印 / 导出 PDF**：自动挂载 `@media print` 净化样式，屏蔽网页无用按钮与背景噪点，一键唤起系统打印对话框存为矢量 PDF。
 
 ### 4. 剪贴板净化与外链直达
-- **版权小尾巴清洗**：彻底屏蔽类似 `“作者：xxx 链接：https://... 来源：知乎 著作权归作者所有...”` 以及 CSDN 的版权说明后缀。
+- **版权小尾巴清洗**：在已知技术平台彻底屏蔽类似 `“作者：xxx 链接：https://... 来源：知乎 著作权归作者所有...”` 以及 CSDN 的版权说明后缀；在未知站点保持克制，不破坏富文本应用编辑器行为。
 - **外链中转绕过**：直接跳过 `link.zhihu.com`、`link.csdn.net`、`link.juejin.cn` 等平台的中转跳转确认页，直达目标站点。
+
+### 5. 全网兜底通用阅读模式 (Universal Fallback)
+- **轻量本地启发式引擎 (`UniversalExtractor`)**：综合评估 `<p>` 数量、CJK+拉丁字符加权字数、标点密度、正反向 class/id 权重（如 `article`/`prose` vs `sidebar`/`newsletter`/`comments`）及链接密度，并将同一 `<article>` 下分散的多 `<section>` 正文统一合并。
+- **严谨双阈值门控**：自动展示悬浮坞时使用严格阈值（`finalScore >= 22`、`totalWeightedText >= 450`、段落数与低链接密度校验且过滤多篇卡片聚合页），确保首页列表/管理后台干净清爽；手动按 `Alt + R` 或菜单触发时放宽阈值并兜底语义标签，强制切入沉浸阅读、TOC 与导出流程。
+- **灵活域名显隐控制**：支持在设置面板切换“智能检测 (`auto`) / 全部网页显示 (`always`) / 仅快捷键与菜单 (`manual`)”，或将当前域名加入 `ignoredDockDomains`。
+
+### 6. 可视化元素橡皮擦 (Element Zapper)
+- **交互选区与层级微调**：按 `Alt + Z`、点击工具坞橡皮擦图标或设置面板按钮进入擦除模式，实时高亮悬停节点并预览精准 CSS 选择器；支持键盘 <kbd>↑</kbd> / <kbd>↓</kbd> 或 HUD 按钮逐级扩大至父元素/缩小至子元素。
+- **即时隐藏与撤销**：左键点击立即生成精简且唯一的 CSS 选择器（优先 `id`、语义属性、`class` 组合及结构路径），持久化写入当前域名规则表 `pureReaderZapperRules` 并实时生效；支持 HUD“↶ 撤销”或 <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>Z</kbd> 即时撤回最近一条隐藏规则。
+- **零闪烁回放与规则管理**：后续再次打开同一域名时，脚本于 `document-start` 阶段通过 `applyZapperCSS()` 前置注入屏蔽规则（Zero FOUC），且不误伤脚本自身 UI；设置面板内提供当前域名规则清单，支持单条“恢复”实时重现或一键清空。
 
 ---
 
 ## 数据模型与配置清单
 
-所有配置均由 `GM_getValue` / `GM_setValue` 引擎在沙箱内持久化保存：
+所有配置均由 `GM_getValue` / `GM_setValue` 引擎在沙箱内持久化保存（核心配置键为 `pureReaderConfig`，橡皮擦规则键为 `pureReaderZapperRules`）：
 
 | 配置键名 (`Key`) | 类型 | 默认值 | 功能释义 |
 |---|:---:|:---:|---|
@@ -148,10 +156,15 @@ sequenceDiagram
 | `enableCodeCopy` | `boolean` | `true` | 代码块免登录一键复制增强 |
 | `hideTopNav` | `boolean` | `true` | 净化/隐藏各平台顶部导航栏与大头图横幅 (CSDN/掘金/博客园/简书等) |
 | `wideArticleLayout` | `boolean` | `true` | **宽屏大视野排版**：将各平台正文及版芯自适应拓宽至 1000~1200px |
+| `enableUniversalFallback` | `boolean` | `true` | 在未知域名启用全网兜底启发式正文识别与阅读套件 |
+| `universalDockMode` | `string` | `'auto'` | 未知域名悬浮坞显示策略（`'auto'` 智能检测 / `'always'` 始终显示 / `'manual'` 仅手动） |
+| `ignoredDockDomains` | `string[]` | `[]` | 禁止自动显示右下角悬浮工具坞的域名黑名单 |
 | `zenTheme` | `string` | `'cream'` | 阅读模式主题（`cream` / `green` / `dark` / `white`） |
 | `zenFontSize` | `number` | `17` | 阅读模式基准字号 (px) |
 | `zenMaxWidth` | `number` | `1000` | 阅读模式最大版芯宽度 (px) |
 | `showFloatingDock` | `boolean` | `true` | 显示右下角轻量悬浮工具坞 |
+
+- **元素橡皮擦规则模型 (`pureReaderZapperRules`)**：按域名分组存储，结构为 `{ [hostname]: Array<{ selector: string, label: string, createdAt: number }> }`。
 
 ---
 
@@ -186,11 +199,27 @@ sequenceDiagram
 |:---:|---|
 | <kbd>Alt</kbd> + <kbd>R</kbd> | 开启 / 退出沉浸式阅读模式 (Zen Mode) |
 | <kbd>Alt</kbd> + <kbd>T</kbd> | 展开 / 收起文章悬浮大纲目录 (Floating TOC) |
-| <kbd>Esc</kbd> | 退出沉浸式阅读视图 |
+| <kbd>Alt</kbd> + <kbd>Z</kbd> | 启动 / 退出可视化元素橡皮擦 (Element Zapper) |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | 橡皮擦模式下扩大选区至父元素 / 缩小选区至子元素 |
+| <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>Z</kbd> | 橡皮擦模式下撤销上一次隐藏操作 |
+| <kbd>Esc</kbd> | 退出沉浸式阅读视图或退出元素橡皮擦（橡皮擦模式亦支持右键退出） |
 
 ---
 
 ## 更新记录
+
+### v0.1.0
+
+**全网兜底通用阅读模式 (Universal Fallback)**
+- 扩展 `@match` 覆盖全网 `http://*/*` 与 `https://*/*`，在保留 6 大中文平台深度净化体验基础上，为任意个人博客、Substack、Medium、新闻与文档站点提供通用阅读支持。
+- 新增轻量启发式正文引擎 `UniversalExtractor`：支持中英文混合加权字符统计、标点密度、链接密度、多 `<section>` 语义父容器（`<article>`）聚合与多卡片聚合页识别，提供严格自动探测（`auto` 悬浮坞）与手动宽松触发双通道。
+- 优化未知域名兼容边界：跳过更多登录/OAuth/结算页面（`isAuthPage()`），未知站点 `unblockCopy` 仅对文章区温和解锁且不注入全局粘贴拦截，避免破坏富文本编辑器与 Web 应用。
+- 强化跨站正文提取与导出：`ZenReader` 补充四套主题下的前景色与表格高对比度覆盖规则（修复暗色宿主站点白字白底问题），并增强 `<picture>` `srcset`、懒加载图片及相对 URL（链接/图片）绝对路径转换，`FloatingTOC` 自动屏蔽表单、推荐框、评论区与隐藏/已擦除块内噪声标题。
+
+**可视化元素橡皮擦 (Element Zapper)**
+- 新增 `ElementZapper` 与按域名持久化存储 `ZapperStore`（存储键 `pureReaderZapperRules`）：按 <kbd>Alt</kbd>+<kbd>Z</kbd>、悬浮坞或设置按钮即可悬停高亮并点选隐藏页面干扰元素，支持 <kbd>↑</kbd>/<kbd>↓</kbd> DOM 层级微调、唯一 CSS 选择器合成及 <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Z</kbd> 实时撤销。
+- `document-start` 阶段通过 `safeAddStyle` 与 `applyZapperCSS()` 前置注入当前域名屏蔽样式，配合 `MutationObserver` 延迟挂载保护，实现零闪烁隐藏且隔离脚本自身 UI。
+- 设置面板新增「全网通用阅读模式」策略切换（`auto` / `always` / `manual`）、当前域名浮窗屏蔽开关（`ignoredDockDomains`）及「可视化元素橡皮擦」按域名规则管理（查看、单条实时恢复、清空）。
 
 ### v0.0.3
 

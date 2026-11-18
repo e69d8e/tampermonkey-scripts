@@ -4,29 +4,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`pure-reader` is a self-contained Tampermonkey userscript (`pure-reader.user.js`) that provides a distraction-free, privacy-preserving, and enhanced reading experience across major Chinese technical and content platforms (CSDN, Zhihu, Juejin, JianShu, Cnblogs, WeChat Articles).
+`pure-reader` is a self-contained Tampermonkey userscript (`pure-reader.user.js`) that provides deep ad-blocking and layout enhancement for 6 major Chinese content platforms (CSDN, Zhihu, Juejin, JianShu, Cnblogs, WeChat Articles), plus a **Universal Fallback** reading mode (lightweight Readability-style heuristic extractor) and per-domain **Element Zapper** across arbitrary `http://*/*` and `https://*/*` websites.
 
 ## Architecture
 
 The script follows a linear, pipeline-based single IIFE architecture:
 
 1. **Design Tokens (`THEME`)**: Warm editorial canvas inspired by Anthropic's design system (`#faf9f5` canvas, `#cc785c` terracotta primary, `#efe9de` card surfaces).
-2. **Config Manager (`DEFAULT_CONFIG`, `loadConfig`, `saveConfig`)**: Reads and persists preferences via `GM_getValue`/`GM_setValue` with fallback to `localStorage`.
-3. **Pre-render CSS Engine (`injectStartCSS`)**: Injects zero-flicker CSS rules at `document-start` via `GM_addStyle`, handling layout centering, ad removal, and login-modal suppressing before DOM paint.
-4. **Copy Guard (`setupCopyGuard`)**: Captures the `copy` event at the capturing phase, cleans copyright boilerplate suffixes (`著作权归作者所有...`, CSDN copyright notes), and unlocks `user-select` styles.
-5. **Link Guard (`setupLinkGuard`)**: Resolves redirect URLs on Zhihu, CSDN, Juejin, and JianShu to prevent intermediate "leaving site" warning pages.
-6. **Platform Fixes (`setupPlatformFixes`)**: Site-specific DOM observers and handlers (auto-expanding CSDN full text and unlocking code-copy buttons; suppressing Zhihu's modal screen locks).
-7. **Floating Smart TOC (`FloatingTOC`)**: Scans `h1-h4` headings within detected article wrappers and renders an interactive, smooth-scrolling table of contents with scroll spy.
-8. **Zen Reader Mode (`ZenReader`)**: Renders an isolated, distraction-free reading overlay with 4 eye-care color palettes (Cream, Green, White, Dark), adjustable type scale, and line length.
-9. **Article Exporter (`Exporter`)**: Converts purified DOM trees into clean Markdown (`.md`) or invokes clean print styles for PDF export.
-10. **UI Dock & Settings (`SettingsUI`)**: Minimal floating dock at bottom-right plus a modal settings dialog with hotkeys (`Alt+R`, `Alt+T`).
+2. **Config & Rule Persistence (`DEFAULT_CONFIG`, `loadConfig`, `saveConfig`, `ZapperStore`)**: Persists `pureReaderConfig` and per-host `pureReaderZapperRules` via `GM_getValue`/`GM_setValue` with fallback to `localStorage`.
+3. **Pre-render CSS Engine (`injectStartCSS`, `applyZapperCSS`, `safeAddStyle`)**: Injects zero-flicker CSS rules at `document-start` (handling pre-`<html>` DOM readiness via `MutationObserver` fallback), skipping login/auth routes (`isAuthPage()`). On unknown domains (`!isKnownPlatform`), only user Zapper rules and scoped selection rules are injected.
+4. **Copy & Link Guards (`setupCopyGuard`, `setupLinkGuard`)**: Captures copy events on known platforms to strip copyright boilerplate without breaking rich web apps on unknown hosts, and resolves redirect URLs cleanly.
+5. **Platform Fixes (`setupPlatformFixes`)**: Site-specific DOM observers and handlers (auto-expanding CSDN/JianShu content, unlocking code-copy buttons, suppressing Zhihu login locks).
+6. **Universal Fallback Extractor (`UniversalExtractor`, `extractArticleData`)**: Scores DOM candidates using CJK/Latin weighted length, punctuation count, `<p>` density, semantic tag weights, and link density with strict auto-dock vs manual trigger thresholds.
+7. **Element Zapper (`ElementZapper`)**: Interactive hover highlighter with `↑`/`↓` DOM hierarchy stepping, compact CSS selector synthesis, live HUD undo (`Ctrl/Cmd+Z`), and per-domain persistent hiding.
+8. **Floating Smart TOC (`FloatingTOC`)**: Scans `h1-h4` headings (filtering noise containers and zapped nodes) and renders an interactive scroll-spied table of contents.
+9. **Zen Reader Mode (`ZenReader`)**: Isolated distraction-free overlay with contrast-safe color palettes (`cream`, `green`, `dark`, `white`), type scale, width toggle, and responsive `<picture>`/`srcset`/lazy-img recovery.
+10. **Article Exporter (`Exporter`)**: Converts purified article clones into Markdown (`.md` download) with resolved absolute URLs or triggers clean print styles for PDF export.
+11. **UI Dock & Settings (`SettingsUI`)**: Bottom-right floating dock (`universalDockMode`: `auto` | `always` | `manual`, plus `ignoredDockDomains`), Zapper rule manager modal, Tampermonkey menu commands, and global hotkeys (`Alt+R`, `Alt+T`, `Alt+Z`).
 
 ## Adding Support for a New Platform
 
-To add a new platform:
-1. Add match patterns to the `@match` headers in `pure-reader.user.js`.
-2. Add hostname detection flag (e.g. `const isNewSite = host.includes('newsite.com');`).
-3. Add site-specific hide and layout rules to `injectStartCSS()`.
-4. If the site has redirect links, add regex pattern to `resolveRealUrl()` in `setupLinkGuard()`.
-5. Add content element and title selector to `extractArticleData()`.
-6. Document the platform in `README.md`.
+Because `@match` already covers `http://*/*` and `https://*/*`, adding a dedicated site adapter (which overrides `UniversalExtractor`) involves:
+1. Add hostname detection flag (e.g. `const isNewSite = host.includes('newsite.com');`) and include it in `isKnownPlatform`.
+2. Add site-specific hide and layout rules to `injectStartCSS()`.
+3. If the site has redirect links, add regex pattern to `resolveRealUrl()` in `setupLinkGuard()`.
+4. Add content element and title selector to `extractArticleData()`.
+5. Document the platform in `README.md`.

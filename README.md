@@ -23,7 +23,7 @@
 | **[斗鱼直播美化](./douyu-beautification)** | `0.0.1` | `*://www.douyu.com/*`<br>`*://douyu.com/*` | • `document-start` 零闪烁 CSS 注入<br>• 10 项全方位界面冗余元素净化<br>• 16:9 居中自适应大窗 / 100% 满屏<br>• 顶栏即时设置面板 & 实时热切换 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyu-beautification/douyu-beautification.user.js) | [使用教程](./douyu-beautification/README.md) |
 | **[抖音直播美化](./douyin-beautification)** | `0.1.0` | `*://live.douyin.com/*`<br>`*://www.douyin.com/root/live/*`<br>`*://www.douyin.com/live/*` | • `document-start` 零闪烁净化，聊天/礼物/弹幕/活动一次清空<br>• 竖屏直播全窗口沉浸 + 氛围光效<br>• 默认静音 & 自动高清<br>• Shadow DOM 悬浮顶栏与毛玻璃设置面板 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/douyin-beautification/douyin-beautification.user.js) | [使用教程](./douyin-beautification/README.md) |
 | **[时间线净化](./social-feed-cleaner)** | `0.1.1` | `*://www.xiaohongshu.com/*`<br>`*://xiaohongshu.com/*`<br>`*://www.weibo.com/*`<br>`*://weibo.com/*` | • 小红书 / 微博双平台 `document-start` 零闪烁净化<br>• 登录弹层、热搜/推荐侧栏、顶部 Hero 与推广卡片一次清理<br>• 小红书四列瀑布流 & 微博 642px 阅读列居中<br>• 广告/推荐/直播/短视频智能过滤 + Shadow DOM 专注面板 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/social-feed-cleaner/social-feed-cleaner.user.js) | [使用教程](./social-feed-cleaner/README.md) |
-| **[纯净阅读 (PureReader)](./pure-reader)** | `0.0.1` | `*://*.csdn.net/*`<br>`*://*.zhihu.com/*`<br>`*://juejin.cn/*`<br>`*://*.jianshu.com/*`<br>`*://*.cnblogs.com/*`<br>`*://mp.weixin.qq.com/*` | • 全平台宽屏大视野排版 (突破知乎/掘金/简书/博客园/公众号多层容器约束至 980~1200px)<br>• 自动展开全文 & CSDN 强制登录跳转熔断<br>• 净化/隐藏吸顶导航栏与大头图横幅<br>• 解除复制限制与版权小尾巴清洗<br>• 外链安全中转直达跳转<br>• 智能悬浮大纲 (TOC) & 4色沉浸阅读模式<br>• 一键清洗导出 Markdown / PDF | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/pure-reader/pure-reader.user.js) | [使用教程](./pure-reader/README.md) |
+| **[纯净阅读 (PureReader)](./pure-reader)** | `0.1.0` | 6 大深度适配平台 + 全网通用:<br>`http://*/*`<br>`https://*/*` | • **6大中文平台深度净化**：宽屏排版 (980~1200px)、自动展开、CSDN 登录熔断、复制净化与外链直达<br>• **全网兜底通用阅读模式**：CJK+英文启发式正文识别，未知站点一键切入 Zen Mode / TOC / Markdown 导出<br>• **可视化元素橡皮擦**：任意网页点选隐藏侧边栏/广告/浮窗，按域名 `document-start` 永久生效<br>• 4色对比度安全沉浸阅读 & 绝对路径 Markdown/PDF 导出 | [⚡ 一键安装](https://github.com/e69d8e/tampermonkey-scripts/raw/main/pure-reader/pure-reader.user.js) | [使用教程](./pure-reader/README.md) |
 
 
 ---
@@ -70,11 +70,13 @@ flowchart TB
             end
 
             subgraph PureReader_Module["纯净阅读增强引擎 (document-start)"]
-                PR_CSS["零闪烁净化样式 (GM_addStyle)"]
+                PR_CSS["零闪烁净化与橡皮擦规则注入 (safeAddStyle)"]
                 PR_CP["剪贴板防劫持与复制解禁器"]
                 PR_LK["外链中转直达拦截器"]
+                PR_UE["全网兜底启发式正文识别 (UniversalExtractor)"]
+                PR_ZAP["可视化元素橡皮擦 (ElementZapper)"]
                 PR_TOC["智能悬浮大纲 (TOC) 控制器"]
-                PR_ZEN["沉浸阅读模式 & 知识导出器"]
+                PR_ZEN["沉浸阅读模式 & Markdown/PDF 导出器"]
                 PR_UI["Anthropic 悬浮 Dock & 设置面板"]
             end
 
@@ -372,25 +374,36 @@ interface SocialFeedCleanerConfig {
 }
 ```
 
-### 5. 纯净阅读增强配置模型 (`pureReaderConfig`)
+### 5. 纯净阅读增强配置模型 (`pureReaderConfig` & `pureReaderZapperRules`)
 
 ```typescript
 interface PureReaderConfig {
-    unblockCopy: boolean;       // 解除复制限制与版权小尾巴清洗
-    bypassRedirect: boolean;    // 外链直接跳转（绕过中转页）
-    removeAds: boolean;         // 拦截广告、营销横幅与浮动挂件
-    autoExpandContent: boolean; // 自动展开全文/阅读全文
-    blockLoginModal: boolean;   // 拦截未登录阻断弹窗与强制锁屏
-    enableFloatingTOC: boolean; // 启用智能悬浮大纲目录
-    enableZenMode: boolean;     // 启用沉浸式极简阅读器
-    enableCodeCopy: boolean;    // 代码块免登录一键复制增强
-    hideTopNav: boolean;        // 净化/隐藏各平台顶部导航栏与大横幅
-    wideArticleLayout: boolean; // 宽屏大视野排版：正文及版芯自适应加宽至 980~1200px
-    zenTheme: 'cream' | 'green' | 'dark' | 'white'; // 沉浸阅读主题调色板
-    zenFontSize: number;        // 阅读字号大小 (px)
-    zenMaxWidth: number;        // 阅读版芯最大宽度 (px)
-    showFloatingDock: boolean;  // 显示右下角悬浮工具坞
+    unblockCopy: boolean;             // 解除复制限制与版权小尾巴清洗
+    bypassRedirect: boolean;          // 外链直接跳转（绕过中转页）
+    removeAds: boolean;               // 拦截广告、营销横幅与浮动挂件
+    autoExpandContent: boolean;       // 自动展开全文/阅读全文
+    blockLoginModal: boolean;         // 拦截未登录阻断弹窗与强制锁屏
+    enableFloatingTOC: boolean;       // 启用智能悬浮大纲目录
+    enableZenMode: boolean;           // 启用沉浸式极简阅读器
+    enableCodeCopy: boolean;          // 代码块免登录一键复制增强
+    hideTopNav: boolean;              // 净化/隐藏各平台顶部导航栏与大横幅
+    wideArticleLayout: boolean;       // 宽屏大视野排版：正文及版芯自适应加宽至 980~1200px
+    enableUniversalFallback: boolean; // 在未知域名启用启发式正文识别与通用阅读模式
+    universalDockMode: 'auto' | 'always' | 'manual'; // 未知域名悬浮坞展示策略
+    ignoredDockDomains: string[];     // 隐藏右下角浮窗的域名列表
+    zenTheme: 'cream' | 'green' | 'dark' | 'white';  // 沉浸阅读主题调色板
+    zenFontSize: number;              // 阅读字号大小 (px)
+    zenLineHeight: number;            // 阅读行高 (1.5-2.2)
+    zenMaxWidth: number;              // 阅读版芯最大宽度 (px)
+    zenFontFamily: 'sans' | 'serif';  // 沉浸阅读字体族
+    showFloatingDock: boolean;        // 显示右下角悬浮工具坞
 }
+
+type PureReaderZapperRules = Record<string, Array<{
+    selector: string;                 // 唯一 CSS 选择器
+    label: string;                    // 元素摘要标识
+    createdAt: number;                // 规则添加时间戳
+}>>;
 ```
 
 ---
